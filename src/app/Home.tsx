@@ -12,30 +12,19 @@ export default function Home() {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const ffmpegRef = useRef(new FFmpeg());
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const messageRef = useRef<HTMLParagraphElement | null>(null);
+  const [progress, setProgress] = useState(0);
 
   const load = async () => {
     const useMultiThreaded = false;
     setIsLoading(true);
-    const baseURL = `https://unpkg.com/@ffmpeg/core${useMultiThreaded ? "-mt" : ""}@0.12.6  /dist/umd`;
+    const baseURL = `https://unpkg.com/@ffmpeg/core${useMultiThreaded ? "-mt" : ""}@0.12.6/dist/umd`;
     const ffmpeg = ffmpegRef.current;
     ffmpeg.on("log", ({ message }) => {
       console.log("FFmpeg log:", message);
-      // if (!messageRef.current) {
-      //   return
-      // }
-      // if (message === "Aborted()") {
-      //   messageRef.current.innerHTML = "";
-      // }
-      // messageRef.current.innerHTML = message;
     });
     ffmpeg.on("progress", (progressEvent) => {
       console.log("Progress:", progressEvent);
-
-      if (!messageRef.current) {
-        return
-      }
-      messageRef.current.innerHTML = `${(progressEvent.progress * 100).toFixed(1)}%`;
+      setProgress(progressEvent.progress * 100);
     });
     // toBlobURL is used to bypass CORS issue, urls with the same
     // domain can be used directly.
@@ -50,6 +39,7 @@ export default function Home() {
 
   const processVideo = async (file: File) => {
     setIsProcessing(true);
+    setProgress(0);
     const ffmpeg = ffmpegRef.current;
 
     await ffmpeg.writeFile("input.mp4", await fetchFile(file));
@@ -60,6 +50,7 @@ export default function Home() {
     const url = URL.createObjectURL(new Blob([data.buffer], { type: "video/mp4" }));
     setVideoUrl(url);
     setIsProcessing(false);
+    setProgress(0);
   };
 
   const handleDrop = async (e: React.DragEvent) => {
@@ -85,7 +76,7 @@ export default function Home() {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-8">
       {!loaded ? (
         <button
-          className="flex items-center gap-3 bg-gray-900 hover:bg-gray-800 text-white px-8 py-4 rounded-xl transition-all duration-200 shadow-lg"
+          className="flex items-center gap-3 bg-gray-900 hover:bg-gray-800 text-white px-8 py-4 rounded-lg transition-all duration-200 shadow-lg"
           onClick={load}
         >
           Load ffmpeg
@@ -109,7 +100,7 @@ export default function Home() {
         <div className="w-full max-w-2xl">
           {!videoUrl ? (
             <div
-              className={`border-2 border-dashed rounded-2xl p-16 text-center transition-all duration-200 ${
+              className={`border-2 border-dashed rounded-xl p-16 text-center transition-all duration-200 ${
                 isDragging
                   ? "border-gray-900 bg-gray-100 scale-105"
                   : "border-gray-300 hover:border-gray-400"
@@ -122,7 +113,15 @@ export default function Home() {
                 {isProcessing ? (
                   <>
                     <div className="animate-spin w-12 h-12 border-4 border-gray-300 border-t-gray-900 rounded-full mx-auto mb-4"></div>
-                    <p>Processing video...</p>
+                    <p className="mb-4">Processing video...</p>
+                    <div className="w-full max-w-xs mx-auto">
+                      <progress
+                        value={progress}
+                        max={100}
+                        className="w-full h-2 [&::-webkit-progress-bar]:rounded-md [&::-webkit-progress-bar]:bg-gray-200 [&::-webkit-progress-value]:rounded-md [&::-webkit-progress-value]:bg-gray-900 [&::-moz-progress-bar]:rounded-md [&::-moz-progress-bar]:bg-gray-900"
+                      />
+                      <p className="text-sm text-gray-500 mt-2">{progress.toFixed(1)}%</p>
+                    </div>
                   </>
                 ) : (
                   <>
@@ -140,17 +139,16 @@ export default function Home() {
                 ref={videoRef}
                 src={videoUrl}
                 controls
-                className="w-full rounded-xl shadow-lg"
+                className="w-full rounded-lg shadow-lg"
               />
               <button
                 onClick={() => setVideoUrl(null)}
-                className="w-full bg-gray-900 hover:bg-gray-800 text-white py-3 rounded-xl transition-all duration-200"
+                className="w-full bg-gray-900 hover:bg-gray-800 text-white py-3 rounded-lg transition-all duration-200"
               >
                 Process another video
               </button>
             </div>
           )}
-          <p ref={messageRef} className="text-xs text-gray-500 mt-4 h-4 overflow-hidden"></p>
         </div>
       )}
     </div>
