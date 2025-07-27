@@ -15,20 +15,34 @@ export default function Home() {
   const messageRef = useRef<HTMLParagraphElement | null>(null);
 
   const load = async () => {
+    const useMultiThreaded = false;
     setIsLoading(true);
-    const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd";
+    const baseURL = `https://unpkg.com/@ffmpeg/core${useMultiThreaded ? "-mt" : ""}@0.12.6  /dist/umd`;
     const ffmpeg = ffmpegRef.current;
     ffmpeg.on("log", ({ message }) => {
-      if (messageRef.current) messageRef.current.innerHTML = message;
+      console.log("FFmpeg log:", message);
+      // if (!messageRef.current) {
+      //   return
+      // }
+      // if (message === "Aborted()") {
+      //   messageRef.current.innerHTML = "";
+      // }
+      // messageRef.current.innerHTML = message;
+    });
+    ffmpeg.on("progress", (progressEvent) => {
+      console.log("Progress:", progressEvent);
+
+      if (!messageRef.current) {
+        return
+      }
+      messageRef.current.innerHTML = `${(progressEvent.progress * 100).toFixed(1)}%`;
     });
     // toBlobURL is used to bypass CORS issue, urls with the same
     // domain can be used directly.
     await ffmpeg.load({
       coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-      wasmURL: await toBlobURL(
-        `${baseURL}/ffmpeg-core.wasm`,
-        "application/wasm"
-      ),
+      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
+      workerURL: useMultiThreaded ? await toBlobURL(`${baseURL}/ffmpeg-core.worker.js`, "text/javascript") : undefined,
     });
     setLoaded(true);
     setIsLoading(false);
