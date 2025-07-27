@@ -13,11 +13,11 @@ export default function Home() {
   const ffmpegRef = useRef(new FFmpeg());
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [progress, setProgress] = useState(0);
+  const useMultiThreaded = true;
 
   const load = async () => {
-    const useMultiThreaded = false;
     setIsLoading(true);
-    const baseURL = `https://unpkg.com/@ffmpeg/core${useMultiThreaded ? "-mt" : ""}@0.12.6/dist/umd`;
+    const baseURL = `https://unpkg.com/@ffmpeg/core${useMultiThreaded ? "-mt" : ""}@0.12.10/dist/umd`;
     const ffmpeg = ffmpegRef.current;
     ffmpeg.on("log", ({ message }) => {
       console.log("FFmpeg log:", message);
@@ -43,11 +43,13 @@ export default function Home() {
     const ffmpeg = ffmpegRef.current;
 
     await ffmpeg.writeFile("input.mp4", await fetchFile(file));
+    const threads = useMultiThreaded ? ["-threads", "4"] : [];
     // Invert colors using negate filter
-    await ffmpeg.exec(["-i", "input.mp4", "-vf", "negate", "-c:a", "copy", "output.mp4"]);
+    await ffmpeg.exec(["-i", "input.mp4", "-vf", "negate", "-c:a", "copy", ...threads, "output.mp4"]);
 
-    const data = (await ffmpeg.readFile("output.mp4")) as any;
-    const url = URL.createObjectURL(new Blob([data.buffer], { type: "video/mp4" }));
+    const data = await ffmpeg.readFile("output.mp4");
+    // @ts-expect-error as Uint8Array
+    const url = URL.createObjectURL(new Blob([(data as Uint8Array).buffer], { type: "video/mp4" }));
     setVideoUrl(url);
     setIsProcessing(false);
     setProgress(0);
