@@ -60,11 +60,12 @@ export default function Home() {
     await ffmpeg.writeFile("input.mp4", await fetchFile(file));
     const threads = useMultiThreaded ? ["-threads", "4"] : [];
     // Invert colors using negate filter
+    // await ffmpeg.exec(["-i", "input.mp4", "-c", "copy", ...threads, "output.mp4"]);
     // await ffmpeg.exec(["-i", "input.mp4", "-vf", "negate", "-c:a", "copy", ...threads, "output.mp4"]);
     await ffmpeg.exec([
       "-i", "input.mp4",
       // "-filter_complex", "[0:v]split[a][b];[b]setpts=PTS+(10/FR/TB),negate,format=rgba,colorchannelmixer=aa=0.5[c];[a][c]overlay=eof_action=pass",
-      "-filter_complex", "[0:v]split[a][b];[b]setpts=PTS+(10/FR/TB),negate,format=rgba,colorchannelmixer=aa=0.5[c];[a][c]overlay=eof_action=pass,eq=brightness=-0.5",
+      "-filter_complex", "[0:v]split[a][b];[b]setpts=PTS+(10/FR/TB),negate,format=rgba,colorchannelmixer=aa=0.5[c];[a][c]overlay=eof_action=pass,eq=brightness=-0.25",
       // ...threads,
       "output.mp4"
     ]);
