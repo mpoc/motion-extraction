@@ -65,7 +65,7 @@ export default function Home() {
     await ffmpeg.exec([
       "-i", "input.mp4",
       // "-filter_complex", "[0:v]split[a][b];[b]setpts=PTS+(10/FR/TB),negate,format=rgba,colorchannelmixer=aa=0.5[c];[a][c]overlay=eof_action=pass",
-      "-filter_complex", "[0:v]split[a][b];[b]setpts=PTS+(10/FR/TB),negate,format=rgba,colorchannelmixer=aa=0.5[c];[a][c]overlay=eof_action=pass,eq=brightness=-0.25",
+      "-filter_complex", "[0:v]split[a][b];[b]setpts=PTS+(10/FR/TB),negate,format=rgba,colorchannelmixer=aa=0.5[c];[a][c]overlay=eof_action=pass,eq=brightness=-0.5",
       // ...threads,
       "output.mp4"
     ]);
