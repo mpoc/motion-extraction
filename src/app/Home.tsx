@@ -3,6 +3,20 @@
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile, toBlobURL } from "@ffmpeg/util";
 import { useRef, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Upload, Film, Loader2, RotateCcw } from "lucide-react";
+import { Inter, JetBrains_Mono } from "next/font/google";
+import clsx from "clsx";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter"
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono"
+});
 
 export default function Home() {
   const [loaded, setLoaded] = useState(false);
@@ -75,84 +89,133 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-8">
-      {!loaded ? (
-        <button
-          className="flex items-center gap-3 bg-gray-900 hover:bg-gray-800 text-white px-8 py-4 rounded-lg transition-all duration-200 shadow-lg"
-          onClick={load}
-        >
-          Load ffmpeg
-          {isLoading && (
-            <span className="animate-spin">
-              <svg
-                viewBox="0 0 1024 1024"
-                focusable="false"
-                data-icon="loading"
-                width="1em"
-                height="1em"
-                fill="currentColor"
-                aria-hidden="true"
+    <div className={clsx(
+      "min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-8",
+      inter.variable,
+      jetbrainsMono.variable,
+      "font-sans"
+    )}>
+      <AnimatePresence mode="wait">
+        {!loaded ? (
+          <motion.button
+            key="load"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3, ease: "easeOut" }}
+            className={clsx(
+              "flex items-center gap-3 bg-gray-900 hover:bg-gray-800",
+              "text-white px-8 py-4 rounded-lg transition-all duration-200",
+              "shadow-lg hover:shadow-xl transform hover:-translate-y-0.5",
+              "bg-gradient-to-b from-gray-800 to-gray-900"
+            )}
+            onClick={load}
+          >
+            <span className="font-medium">Initialize FFmpeg</span>
+            {isLoading && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.2 }}
               >
-                <path d="M988 548c-19.9 0-36-16.1-36-36 0-59.4-11.6-117-34.6-171.3a440.45 440.45 0 00-94.3-139.9 437.71 437.71 0 00-139.9-94.3C629 83.6 571.4 72 512 72c-19.9 0-36-16.1-36-36s16.1-36 36-36c69.1 0 136.2 13.5 199.3 40.3C772.3 66 827 103 874 150c47 47 83.9 101.8 109.7 162.7 26.7 63.1 40.2 130.2 40.2 199.3.1 19.9-16 36-35.9 36z"></path>
-              </svg>
-            </span>
-          )}
-        </button>
-      ) : (
-        <div className="w-full max-w-2xl">
-          {!videoUrl ? (
-            <div
-              className={`border-2 border-dashed rounded-xl p-16 text-center transition-all duration-200 ${
-                isDragging
-                  ? "border-gray-900 bg-gray-100 scale-105"
-                  : "border-gray-300 hover:border-gray-400"
-              }`}
-              onDrop={handleDrop}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-            >
-              <div className="text-gray-600">
-                {isProcessing ? (
-                  <>
-                    <div className="animate-spin w-12 h-12 border-4 border-gray-300 border-t-gray-900 rounded-full mx-auto mb-4"></div>
-                    <p className="mb-4">Processing video...</p>
-                    <div className="w-full max-w-xs mx-auto">
-                      <progress
-                        value={progress}
-                        max={100}
-                        className="w-full h-2 [&::-webkit-progress-bar]:rounded-md [&::-webkit-progress-bar]:bg-gray-200 [&::-webkit-progress-value]:rounded-md [&::-webkit-progress-value]:bg-gray-900 [&::-moz-progress-bar]:rounded-md [&::-moz-progress-bar]:bg-gray-900"
-                      />
-                      <p className="text-sm text-gray-500 mt-2">{progress.toFixed(1)}%</p>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                    </svg>
-                    <p>Drop video here</p>
-                  </>
+                <Loader2 className="w-5 h-5 animate-spin" />
+              </motion.div>
+            )}
+          </motion.button>
+        ) : (
+          <motion.div
+            key="processor"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.3, ease: "easeOut" }}
+            className="w-full max-w-2xl"
+          >
+            {!videoUrl ? (
+              <motion.div
+                animate={{
+                  scale: isDragging ? 1.02 : 1,
+                  borderColor: isDragging ? "#111827" : "#d1d5db"
+                }}
+                transition={{ duration: 0.2 }}
+                className={clsx(
+                  "border-2 border-dashed rounded-xl p-16 text-center",
+                  "transition-all duration-200 bg-white/50 backdrop-blur-sm",
+                  "shadow-sm hover:shadow-md"
                 )}
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <video
-                ref={videoRef}
-                src={videoUrl}
-                controls
-                className="w-full rounded-lg shadow-lg"
-              />
-              <button
-                onClick={() => setVideoUrl(null)}
-                className="w-full bg-gray-900 hover:bg-gray-800 text-white py-3 rounded-lg transition-all duration-200"
+                onDrop={handleDrop}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
               >
-                Process another video
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+                <div className="text-gray-600">
+                  {isProcessing ? (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="space-y-4"
+                    >
+                      <Film className="w-12 h-12 mx-auto text-gray-400 animate-pulse" />
+                      <p className="font-medium text-gray-700">Processing video...</p>
+                      <div className="w-full max-w-xs mx-auto space-y-2">
+                        <div className="relative h-2 bg-gray-200 rounded-full overflow-hidden shadow-inner">
+                          <motion.div
+                            className="absolute inset-y-0 left-0 bg-gradient-to-r from-gray-700 to-gray-900 rounded-full"
+                            initial={{ width: "0%" }}
+                            animate={{ width: `${progress}%` }}
+                            transition={{ duration: 0.3 }}
+                          />
+                        </div>
+                        <p className="text-sm text-gray-500 font-mono">{progress.toFixed(1)}%</p>
+                      </div>
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="space-y-4"
+                    >
+                      <Upload className="w-16 h-16 mx-auto text-gray-400" strokeWidth={1.5} />
+                      <div>
+                        <p className="text-lg font-medium text-gray-700">Drop video file</p>
+                        <p className="text-sm text-gray-500 mt-1">MP4, MOV, or WebM</p>
+                      </div>
+                    </motion.div>
+                  )}
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.1 }}
+                className="space-y-4"
+              >
+                <div className="rounded-lg overflow-hidden shadow-2xl bg-black">
+                  <video
+                    ref={videoRef}
+                    src={videoUrl}
+                    controls
+                    className="w-full"
+                  />
+                </div>
+                <motion.button
+                  whileHover={{ scale: 1.01 }}
+                  whileTap={{ scale: 0.99 }}
+                  onClick={() => setVideoUrl(null)}
+                  className={clsx(
+                    "w-full bg-gray-900 hover:bg-gray-800 text-white py-3 rounded-lg",
+                    "transition-all duration-200 shadow-md hover:shadow-lg",
+                    "flex items-center justify-center gap-2 font-medium",
+                    "bg-gradient-to-b from-gray-800 to-gray-900"
+                  )}
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  Process another video
+                </motion.button>
+              </motion.div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
