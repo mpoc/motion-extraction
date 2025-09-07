@@ -18,6 +18,7 @@ export const metadata: Metadata = {
   keywords: ["video processing", "motion extraction", "frame offset", "video analysis", "motion detection"],
   authors: [{ name: "Motion Extraction" }],
   creator: "Motion Extraction",
+  metadataBase: new URL("https://motion-extraction.vercel.app"),
   openGraph: {
     title: "Motion Extraction - Extract Motion from Videos",
     description: "Advanced video processing tool that extracts motion from videos using frame offset technique. Upload your video and discover hidden motion patterns.",
