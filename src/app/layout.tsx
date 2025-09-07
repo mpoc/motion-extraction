@@ -79,8 +79,6 @@ export default function RootLayout({
         <link rel="icon" type="image/svg+xml" href="/icon-192.svg" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.svg" />
         <link rel="manifest" href="/manifest.json" />
-        <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
-        <script>eruda.init();</script>
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
