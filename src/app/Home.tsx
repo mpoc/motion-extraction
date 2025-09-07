@@ -258,7 +258,7 @@ export default function Home() {
         }
 
         // Get frames at specific timestamps using MediaBunny
-        console.log(`[PROCESS] Frame ${frame}: Getting frames at timestamps:`, { currentTime, offsetTime });
+        // console.log(`[PROCESS] Frame ${frame}: Getting frames at timestamps:`, { currentTime, offsetTime });
 
         let sourceCanvas: HTMLCanvasElement | null = null;
         let offsetCanvas: HTMLCanvasElement | null = null;
