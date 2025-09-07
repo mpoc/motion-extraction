@@ -8,11 +8,12 @@ import {
   getFirstEncodableVideoCodec,
   QUALITY_HIGH
 } from "mediabunny";
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Upload, Film, RotateCcw } from "lucide-react";
+import { Upload, Film, RotateCcw, Play } from "lucide-react";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import clsx from "clsx";
+import { useVideoStore } from "../store/videoStore";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -25,21 +26,33 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export default function Home() {
-  const [isDragging, setIsDragging] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const {
+    isDragging,
+    isProcessing,
+    progress,
+    selectedFile,
+    videoUrl,
+    frameOffset,
+    setIsDragging,
+    setProgress,
+    setSelectedFile,
+    setFrameOffset,
+    clearFile,
+    reset,
+    startProcessing,
+    finishProcessing,
+    canUpload,
+    canProcess,
+    canClear,
+    canAdjustSettings
+  } = useVideoStore();
+
+  // Refs
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [progress, setProgress] = useState(0);
-
-  // __Assumption: Using two video elements for frame offset handling__
-  const sourceVideoRef = useRef<HTMLVideoElement | null>(null);
-  const offsetVideoRef = useRef<HTMLVideoElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const processVideo = async (file: File) => {
-    setIsProcessing(true);
-    setProgress(0);
+    startProcessing();
 
     try {
       // __Decision: Using video elements for decoding instead of ffmpeg__
@@ -62,7 +75,6 @@ export default function Home() {
       const width = sourceVideo.videoWidth;
       const height = sourceVideo.videoHeight;
       const frameRate = 30; // __Assumption: 30fps, could be extracted from metadata if needed__
-      const frameOffset = 10;
       const frameDuration = 1 / frameRate;
 
       // Create OffscreenCanvas for compositing
@@ -139,35 +151,38 @@ export default function Home() {
       // Create result video URL
       const resultBlob = new Blob([output.target.buffer!], { type: output.format.mimeType });
       const resultUrl = URL.createObjectURL(resultBlob);
-      setVideoUrl(resultUrl);
 
       // Cleanup
       URL.revokeObjectURL(videoUrl);
       sourceVideo.remove();
       offsetVideo.remove();
 
+      finishProcessing(resultUrl);
+
     } catch (error) {
       console.error('Error processing video:', error);
       alert('Error processing video: ' + error);
+      finishProcessing(''); // Reset processing state on error
     }
-
-    setIsProcessing(false);
-    setProgress(0);
   };
 
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
 
+    if (!canUpload()) return;
+
     const file = e.dataTransfer.files[0];
     if (file && file.type.startsWith("video/")) {
-      await processVideo(file);
+      setSelectedFile(file);
     }
   };
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragging(true);
+    if (canUpload()) {
+      setIsDragging(true);
+    }
   };
 
   const handleDragLeave = () => {
@@ -175,19 +190,41 @@ export default function Home() {
   };
 
   const handleClick = () => {
-    if (!isProcessing && fileInputRef.current) {
+    if (canUpload() && fileInputRef.current) {
       fileInputRef.current.click();
     }
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!canUpload()) return;
+
     const file = e.target.files?.[0];
     if (file?.type.startsWith("video/")) {
-      await processVideo(file);
+      setSelectedFile(file);
     }
   };
 
-  return (
+  const handleProcessVideo = async () => {
+    if (canProcess() && selectedFile) {
+      await processVideo(selectedFile);
+    }
+  };
+
+  const handleReset = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+    reset();
+  };
+
+  const handleClearFile = () => {
+    if (canClear()) {
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      clearFile();
+    }
+  };  return (
     <div className={clsx(
       "min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-8",
       inter.variable,
@@ -211,34 +248,169 @@ export default function Home() {
                 onChange={handleFileSelect}
                 className="hidden"
               />
+
               <motion.div
-                animate={{
-                  scale: isDragging ? 1.02 : 1,
-                  borderColor: isDragging ? "#111827" : "#d1d5db",
-                }}
-                transition={{ duration: 0.2 }}
-                className={clsx(
-                  "border-2 border-dashed rounded-xl p-16 text-center",
-                  "transition-all duration-200 bg-white/50 backdrop-blur-sm",
-                  "shadow-sm hover:shadow-md",
-                  !isProcessing && "cursor-pointer hover:border-gray-400"
-                )}
-                onDrop={handleDrop}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onClick={handleClick}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="space-y-6"
               >
-                <div className="text-gray-600">
-                  {isProcessing ? (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="space-y-4"
+                {/* Upload Section */}
+                <motion.div
+                  animate={{
+                    scale: isDragging ? 1.02 : 1,
+                    borderColor: isDragging ? "#111827" : "#d1d5db",
+                  }}
+                  transition={{ duration: 0.2 }}
+                  className={clsx(
+                    "border-2 border-dashed rounded-xl p-12 text-center",
+                    "transition-all duration-200 bg-white/50 backdrop-blur-sm",
+                    "shadow-sm hover:shadow-md",
+                    canUpload() && "cursor-pointer hover:border-gray-400",
+                    !canUpload() && "opacity-60"
+                  )}
+                  onDrop={handleDrop}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onClick={handleClick}
+                >
+                  <div className="text-gray-600">
+                    {selectedFile ? (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="space-y-3"
+                      >
+                        <Film className="w-12 h-12 mx-auto text-green-600" />
+                        <div>
+                          <p className="font-medium text-gray-700">{selectedFile.name}</p>
+                          <p className="text-sm text-gray-500">
+                            {(selectedFile.size / (1024 * 1024)).toFixed(1)} MB • Ready to process
+                          </p>
+                        </div>
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="space-y-4"
+                      >
+                        <Upload className="w-16 h-16 mx-auto text-gray-400" strokeWidth={1.5} />
+                        <div>
+                          <p className="text-lg font-medium text-gray-700">
+                            {isProcessing ? "Processing..." : "Drop video file or click to browse"}
+                          </p>
+                          <p className="text-sm text-gray-500 mt-1">
+                            {isProcessing ? "Please wait..." : "MP4, MOV, or WebM"}
+                          </p>
+                        </div>
+                      </motion.div>
+                    )}
+                  </div>
+                </motion.div>
+
+                {/* Frame Offset Controls */}
+                <div className="bg-white/50 backdrop-blur-sm rounded-xl p-6 shadow-sm border border-gray-200">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <label htmlFor="frameOffset" className="text-sm font-medium text-gray-700">
+                        Frame Offset
+                      </label>
+                      <span className="text-sm font-mono text-gray-600 bg-gray-100 px-2 py-1 rounded">
+                        {frameOffset} frames
+                      </span>
+                    </div>
+
+                    <div className="relative">
+                      <input
+                        id="frameOffset"
+                        type="range"
+                        min="1"
+                        max="60"
+                        value={frameOffset}
+                        onChange={(e) => setFrameOffset(parseInt(e.target.value))}
+                        disabled={!canAdjustSettings()}
+                        className={clsx(
+                          "w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer",
+                          "focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-50",
+                          !canAdjustSettings() && "opacity-50 cursor-not-allowed"
+                        )}
+                        style={{
+                          background: `linear-gradient(to right, #374151 0%, #374151 ${((frameOffset - 1) / 59) * 100}%, #e5e7eb ${((frameOffset - 1) / 59) * 100}%, #e5e7eb 100%)`
+                        }}
+                      />
+                      <div className="flex justify-between text-xs text-gray-500 mt-1">
+                        <span>1</span>
+                        <span>60</span>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-gray-500">
+                      Higher offset extracts slower motion
+                    </p>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-3">
+                  {selectedFile && (
+                    <motion.button
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      whileHover={{ scale: canClear() ? 1.01 : 1 }}
+                      whileTap={{ scale: canClear() ? 0.99 : 1 }}
+                      onClick={handleClearFile}
+                      disabled={!canClear()}
+                      className={clsx(
+                        "flex-1 py-3 rounded-lg transition-all duration-200",
+                        "flex items-center justify-center gap-2 font-medium",
+                        canClear()
+                          ? "bg-gray-100 hover:bg-gray-200 text-gray-700"
+                          : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                      )}
                     >
-                      <Film className="w-12 h-12 mx-auto text-gray-400 animate-pulse" />
-                      <p className="font-medium text-gray-700">Processing video...</p>
-                      <div className="w-full max-w-xs mx-auto space-y-2">
-                        <div className="relative h-2 bg-gray-200 rounded-full overflow-hidden shadow-inner">
+                      <RotateCcw className="w-4 h-4" />
+                      Clear File
+                    </motion.button>
+                  )}
+
+                  <motion.button
+                    whileHover={{ scale: canProcess() ? 1.01 : 1 }}
+                    whileTap={{ scale: canProcess() ? 0.99 : 1 }}
+                    onClick={handleProcessVideo}
+                    disabled={!canProcess()}
+                    className={clsx(
+                      "py-3 rounded-lg transition-all duration-200",
+                      "flex items-center justify-center gap-2 font-medium",
+                      selectedFile ? "flex-1" : "w-full",
+                      canProcess()
+                        ? "bg-gradient-to-b from-gray-800 to-gray-900 text-white shadow-md hover:shadow-lg hover:bg-gray-800"
+                        : "bg-gray-400 text-gray-200 cursor-not-allowed"
+                    )}
+                  >
+                    <Play className="w-4 h-4" />
+                    {isProcessing
+                      ? 'Processing...'
+                      : selectedFile
+                        ? 'Process Video'
+                        : 'Select a video file first'
+                    }
+                  </motion.button>
+                </div>
+
+                {/* Processing Progress */}
+                {isProcessing && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="bg-white/50 backdrop-blur-sm rounded-xl p-6 shadow-sm border border-gray-200"
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Film className="w-4 h-4 text-gray-500 animate-pulse" />
+                        <p className="text-sm font-medium text-gray-700">Processing video...</p>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="relative h-2 bg-gray-200 rounded-full overflow-hidden">
                           <motion.div
                             className="absolute inset-y-0 left-0 bg-gradient-to-r from-gray-700 to-gray-900 rounded-full"
                             initial={{ width: "0%" }}
@@ -246,23 +418,14 @@ export default function Home() {
                             transition={{ duration: 0.3 }}
                           />
                         </div>
-                        <p className="text-sm text-gray-500 font-mono">{progress.toFixed(1)}%</p>
+                        <div className="flex justify-between text-xs text-gray-500">
+                          <span>Frame offset: {frameOffset}</span>
+                          <span className="font-mono">{progress.toFixed(1)}%</span>
+                        </div>
                       </div>
-                    </motion.div>
-                  ) : (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="space-y-4"
-                    >
-                      <Upload className="w-16 h-16 mx-auto text-gray-400" strokeWidth={1.5} />
-                      <div>
-                        <p className="text-lg font-medium text-gray-700">Drop video file or click to browse</p>
-                        <p className="text-sm text-gray-500 mt-1">MP4, MOV, or WebM</p>
-                      </div>
-                    </motion.div>
-                  )}
-                </div>
+                    </div>
+                  </motion.div>
+                )}
               </motion.div>
             </>
           ) : (
@@ -283,7 +446,7 @@ export default function Home() {
               <motion.button
                 whileHover={{ scale: 1.01 }}
                 whileTap={{ scale: 0.99 }}
-                onClick={() => setVideoUrl(null)}
+                onClick={handleReset}
                 className={clsx(
                   "w-full bg-gray-900 hover:bg-gray-800 text-white py-3 rounded-lg",
                   "transition-all duration-200 shadow-md hover:shadow-lg",
