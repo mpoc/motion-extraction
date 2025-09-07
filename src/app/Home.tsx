@@ -44,6 +44,7 @@ export default function Home() {
     reset,
     startProcessing,
     finishProcessing,
+    backToSettings,
     canUpload,
     canProcess,
     canClear,
@@ -274,20 +275,36 @@ export default function Home() {
                   className="w-full"
                 />
               </div>
-              <motion.button
-                whileHover={{ scale: 1.01 }}
-                whileTap={{ scale: 0.99 }}
-                onClick={handleReset}
-                className={clsx(
-                  "w-full bg-gray-900 hover:bg-gray-800 text-white py-3 rounded-lg",
-                  "transition-all duration-200 shadow-md hover:shadow-lg",
-                  "flex items-center justify-center gap-2 font-medium",
-                  "bg-gradient-to-b from-gray-800 to-gray-900"
-                )}
-              >
-                <RotateCcw className="w-4 h-4" />
-                Process another video
-              </motion.button>
+              <div className="flex gap-3">
+                <motion.button
+                  whileHover={{ scale: 1.01 }}
+                  whileTap={{ scale: 0.99 }}
+                  onClick={backToSettings}
+                  className={clsx(
+                    "flex-1 bg-gray-700 hover:bg-gray-600 text-white py-3 rounded-lg",
+                    "transition-all duration-200 shadow-md hover:shadow-lg",
+                    "flex items-center justify-center gap-2 font-medium",
+                    "bg-gradient-to-b from-gray-600 to-gray-700"
+                  )}
+                >
+                  <Play className="w-4 h-4" />
+                  Process again
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.01 }}
+                  whileTap={{ scale: 0.99 }}
+                  onClick={handleReset}
+                  className={clsx(
+                    "flex-1 bg-gray-900 hover:bg-gray-800 text-white py-3 rounded-lg",
+                    "transition-all duration-200 shadow-md hover:shadow-lg",
+                    "flex items-center justify-center gap-2 font-medium",
+                    "bg-gradient-to-b from-gray-800 to-gray-900"
+                  )}
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  Process another video
+                </motion.button>
+              </div>
             </motion.div>
           ) : (
             <>

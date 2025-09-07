@@ -26,6 +26,7 @@ type VideoState = {
   reset: () => void;
   startProcessing: () => void;
   finishProcessing: (videoUrl: string) => void;
+  backToSettings: () => void;
 
   // Computed States
   canUpload: () => boolean;
@@ -76,6 +77,12 @@ export const useVideoStore = create<VideoState>((set, get) => ({
     isProcessing: false,
     progress: 0,
     videoUrl
+  }),
+
+  backToSettings: () => set({
+    videoUrl: undefined,
+    progress: 0,
+    isProcessing: false
   }),
 
   // Computed States (Business Logic)
