@@ -188,20 +188,8 @@ export default function Home() {
         fit: 'fill',
       });
 
-      // Create OffscreenCanvas for compositing (fallback to regular canvas if not supported)
-      console.log('[PROCESS] Checking OffscreenCanvas support...');
-      const hasOffscreenCanvas = typeof OffscreenCanvas !== 'undefined';
-      console.log('[PROCESS] OffscreenCanvas supported:', hasOffscreenCanvas);
-
-      const canvas = hasOffscreenCanvas
-        ? new OffscreenCanvas(width, height)
-        : (() => {
-            console.log('[PROCESS] Creating regular canvas fallback...');
-            const regularCanvas = document.createElement('canvas');
-            regularCanvas.width = width;
-            regularCanvas.height = height;
-            return regularCanvas;
-          })();
+      // Create OffscreenCanvas for compositing
+      const canvas = new OffscreenCanvas(width, height)
 
       console.log('[PROCESS] Canvas created:', { width: canvas.width, height: canvas.height });
 
