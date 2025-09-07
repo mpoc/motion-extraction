@@ -190,14 +190,11 @@ export default function Home() {
 
       // Create OffscreenCanvas for compositing
       const canvas = new OffscreenCanvas(width, height)
-      // Create temporary canvas for Safari alpha blending workaround
-      const tempCanvas = new OffscreenCanvas(width, height);
 
       console.log('[PROCESS] Canvas created:', { width: canvas.width, height: canvas.height });
 
       const ctx = canvas.getContext('2d', { alpha: false });
-      const tempCtx = tempCanvas.getContext('2d', { alpha: false });
-      if (!ctx || !tempCtx) {
+      if (!ctx) {
         throw new Error('Failed to get context from canvas.');
       }
       console.log('[PROCESS] Canvas context created:', !!ctx);
@@ -280,7 +277,7 @@ export default function Home() {
 
         // console.log(`[PROCESS] Frame ${frame}: Both frames obtained, compositing...`);
 
-        // Clear main canvas
+        // Clear canvas
         ctx.globalCompositeOperation = 'source-over';
         ctx.globalAlpha = 1;
 
@@ -288,17 +285,13 @@ export default function Home() {
         ctx.drawImage(sourceCanvas, 0, 0, width, height);
         // console.log(`[PROCESS] Frame ${frame}: Source frame drawn`);
 
-        // Safari workaround: Draw inverted, offset frame (B) to temp canvas first
-        tempCtx.globalCompositeOperation = 'source-over';
-        tempCtx.globalAlpha = 1;
-        tempCtx.filter = 'invert(1)';
-        tempCtx.clearRect(0, 0, width, height);
-        tempCtx.drawImage(offsetCanvas, 0, 0, width, height);
-
-        // Then draw temp canvas to main canvas with 50% opacity
+        // Draw inverted, offset frame (B) with 50% opacity
+        ctx.save();
+        ctx.globalCompositeOperation = 'source-over';
         ctx.globalAlpha = 0.5;
-        ctx.filter = 'none';
-        ctx.drawImage(tempCanvas, 0, 0, width, height);
+        ctx.filter = 'invert(1)';
+        ctx.drawImage(offsetCanvas, 0, 0, width, height);
+        ctx.restore();
         // console.log(`[PROCESS] Frame ${frame}: Offset frame drawn with filter`);
 
         // Add frame to output
