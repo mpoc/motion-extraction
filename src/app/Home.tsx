@@ -288,8 +288,7 @@ export default function Home() {
         // Draw inverted, offset frame (B) with 50% opacity
         ctx.save();
         ctx.globalCompositeOperation = 'source-over';
-        ctx.globalAlpha = 0.5;
-        ctx.filter = 'invert(1)';
+        ctx.filter = 'invert(1) opacity(0.5)';
         ctx.drawImage(offsetCanvas, 0, 0, width, height);
         ctx.restore();
         // console.log(`[PROCESS] Frame ${frame}: Offset frame drawn with filter`);
