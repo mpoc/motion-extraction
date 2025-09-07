@@ -65,10 +65,8 @@ export default function Home() {
       const frameOffset = 10;
       const frameDuration = 1 / frameRate;
 
-      // Create canvas for compositing
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
+      // Create OffscreenCanvas for compositing
+      const canvas = new OffscreenCanvas(width, height);
       const ctx = canvas.getContext('2d', { alpha: false })!;
 
       // Setup mediabunny output
