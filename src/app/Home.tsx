@@ -155,9 +155,16 @@ export default function Home() {
       const height = sourceVideo.videoHeight;
       const frameDuration = 1 / frameRate;
 
-      // Create OffscreenCanvas for compositing
-      const canvas = new OffscreenCanvas(width, height);
-      const ctx = canvas.getContext('2d', { alpha: false })!;
+      // Create OffscreenCanvas for compositing (fallback to regular canvas if not supported)
+      const canvas = typeof OffscreenCanvas === 'undefined'
+        ? (() => {
+            const regularCanvas = document.createElement('canvas');
+            regularCanvas.width = width;
+            regularCanvas.height = height;
+            return regularCanvas;
+          })()
+        : new OffscreenCanvas(width, height);
+      const ctx = canvas.getContext('2d', { alpha: false }) as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
       // Setup mediabunny output
       const output = new Output({
