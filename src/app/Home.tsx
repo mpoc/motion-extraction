@@ -193,7 +193,7 @@ export default function Home() {
 
       console.log('[PROCESS] Canvas created:', { width: canvas.width, height: canvas.height });
 
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext('2d', { alpha: false });
       if (!ctx) {
         throw new Error('Failed to get context from canvas.');
       }
