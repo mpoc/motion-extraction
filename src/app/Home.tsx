@@ -1,25 +1,25 @@
 "use client";
 
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import clsx from "clsx";
+import { AnimatePresence, motion } from "framer-motion";
+import { AlertCircle, Film, Play, RotateCcw, Upload } from "lucide-react";
 import {
-  Output,
+  ALL_FORMATS,
+  BlobSource,
   BufferTarget,
-  Mp4OutputFormat,
+  CanvasSink,
   CanvasSource,
   getFirstEncodableVideoCodec,
-  QUALITY_HIGH,
   Input,
-  BlobSource,
-  ALL_FORMATS,
-  CanvasSink
+  Mp4OutputFormat,
+  Output,
+  QUALITY_HIGH
 } from "mediabunny";
-import { useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Upload, Film, RotateCcw, Play, AlertCircle } from "lucide-react";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import Image from "next/image";
-import clsx from "clsx";
+import { useRef } from "react";
 import { useVideoStore } from "../store/videoStore";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -148,22 +148,18 @@ export default function Home() {
     startProcessing();
 
     try {
-      // Extract frame rate using MediaBunny
+      // Create MediaBunny Input for both tracks
       console.log('[PROCESS] Creating MediaBunny Input...');
       const input = new Input({
         source: new BlobSource(file),
         formats: ALL_FORMATS,
       });
 
-      console.log('[PROCESS] Getting tracks...');
-      const tracks = await input.getTracks();
-      console.log('[PROCESS] Found tracks:', tracks.length);
-
-      const videoTrack = tracks.find(track => track.isVideoTrack());
+      console.log('[PROCESS] Getting video track...');
+      const videoTrack = await input.getPrimaryVideoTrack();
       console.log('[PROCESS] Video track found:', !!videoTrack);
 
       if (!videoTrack) {
-        console.error('[PROCESS] No video track found in tracks:', tracks);
         throw new Error('No video track found in the file.');
       }
 
@@ -172,55 +168,24 @@ export default function Home() {
       const frameRate = packetStats.averagePacketRate; // This is the actual FPS
       console.log('[PROCESS] Extracted frame rate:', frameRate, 'fps');
 
-      console.log(`Extracted frame rate: ${frameRate} fps`);
-
-      // __Decision: Using video elements for decoding instead of ffmpeg__
-      console.log('[PROCESS] Creating object URL for video...');
-      const videoUrl = URL.createObjectURL(file);
-      console.log('[PROCESS] Video URL created:', videoUrl);
-
-      // Create and setup source videos
-      console.log('[PROCESS] Creating video elements...');
-      const sourceVideo = document.createElement('video');
-      const offsetVideo = document.createElement('video');
-      sourceVideo.src = videoUrl;
-      offsetVideo.src = videoUrl;
-      sourceVideo.muted = true;
-      offsetVideo.muted = true;
-
-      console.log('[PROCESS] Video elements created, waiting for metadata...');
-
-      // Wait for videos to load metadata
-      await Promise.all([
-        new Promise((resolve) => {
-          console.log('[PROCESS] Setting up source video metadata listener...');
-          sourceVideo.addEventListener('loadedmetadata', () => {
-            console.log('[PROCESS] Source video metadata loaded:', {
-              videoWidth: sourceVideo.videoWidth,
-              videoHeight: sourceVideo.videoHeight,
-              duration: sourceVideo.duration
-            });
-            resolve(undefined);
-          }, { once: true });
-        }),
-        new Promise((resolve) => {
-          console.log('[PROCESS] Setting up offset video metadata listener...');
-          offsetVideo.addEventListener('loadedmetadata', () => {
-            console.log('[PROCESS] Offset video metadata loaded');
-            resolve(undefined);
-          }, { once: true });
-        })
-      ]);
-
-      console.log('[PROCESS] Both videos metadata loaded');
-
-      const width = sourceVideo.videoWidth;
-      const height = sourceVideo.videoHeight;
+      const width = videoTrack.displayWidth;
+      const height = videoTrack.displayHeight;
+      const totalDuration = await input.computeDuration();
       const frameDuration = 1 / frameRate;
 
-      console.log('[PROCESS] Video dimensions:', { width, height });
-      console.log('[PROCESS] Frame duration:', frameDuration);
-      console.log('[PROCESS] Video duration:', sourceVideo.duration);
+      console.log('[PROCESS] Video properties:', { width, height, totalDuration, frameDuration });
+
+      // Create CanvasSinks for both original and offset video streams
+      console.log('[PROCESS] Creating CanvasSinks...');
+      const sourceSink = new CanvasSink(videoTrack, {
+        poolSize: 2,
+        fit: 'fill',
+      });
+
+      const offsetSink = new CanvasSink(videoTrack, {
+        poolSize: 2,
+        fit: 'fill',
+      });
 
       // Create OffscreenCanvas for compositing (fallback to regular canvas if not supported)
       console.log('[PROCESS] Checking OffscreenCanvas support...');
@@ -274,13 +239,13 @@ export default function Home() {
       await output.start();
       console.log('[PROCESS] Output started successfully');
 
-      const totalFrames = Math.floor(sourceVideo.duration * frameRate);
+      const totalFrames = Math.floor(totalDuration * frameRate);
       console.log('[PROCESS] Total frames to process:', totalFrames);
 
-      // __Decision: Using requestVideoFrameCallback if available, otherwise setTimeout__
+      // Process frames using MediaBunny iterators instead of video element seeking
       console.log('[PROCESS] Starting frame processing loop...');
       for (let frame = 0; frame < totalFrames; frame++) {
-        if (frame % 10 === 0) { // Log every 10th frame to avoid spam
+        if (frame % 60 === 0) { // Log every 60th frame to avoid spam
           console.log(`[PROCESS] Processing frame ${frame}/${totalFrames} (${((frame/totalFrames)*100).toFixed(1)}%)`);
         }
 
@@ -291,50 +256,51 @@ export default function Home() {
           console.log('[PROCESS] First frame times:', { currentTime, offsetTime, frameOffset });
         }
 
-        // Seek both videos
-        console.log(`[PROCESS] Frame ${frame}: Seeking to times:`, { currentTime, offsetTime });
-        sourceVideo.currentTime = currentTime;
-        offsetVideo.currentTime = offsetTime;
+        // Get frames at specific timestamps using MediaBunny
+        console.log(`[PROCESS] Frame ${frame}: Getting frames at timestamps:`, { currentTime, offsetTime });
 
-        // Wait for seek to complete
-        console.log(`[PROCESS] Frame ${frame}: Waiting for seek completion...`);
-        await Promise.all([
-          new Promise((resolve) => {
-            const onSeeked = () => {
-              console.log(`[PROCESS] Frame ${frame}: Source video seeked to ${sourceVideo.currentTime}`);
-              resolve(undefined);
-            };
-            sourceVideo.addEventListener('seeked', onSeeked, { once: true });
-          }),
-          new Promise((resolve) => {
-            const onSeeked = () => {
-              console.log(`[PROCESS] Frame ${frame}: Offset video seeked to ${offsetVideo.currentTime}`);
-              resolve(undefined);
-            };
-            offsetVideo.addEventListener('seeked', onSeeked, { once: true });
-          })
-        ]);
+        let sourceCanvas: HTMLCanvasElement | null = null;
+        let offsetCanvas: HTMLCanvasElement | null = null;
 
-        console.log(`[PROCESS] Frame ${frame}: Both videos seeked, drawing to canvas...`);
+        // Get source frame
+        for await (const wrappedCanvas of sourceSink.canvasesAtTimestamps([currentTime])) {
+          if (wrappedCanvas) {
+            sourceCanvas = wrappedCanvas.canvas as HTMLCanvasElement;
+            break;
+          }
+        }
+
+        // Get offset frame
+        for await (const wrappedCanvas of offsetSink.canvasesAtTimestamps([offsetTime])) {
+          if (wrappedCanvas) {
+            offsetCanvas = wrappedCanvas.canvas as HTMLCanvasElement;
+            break;
+          }
+        }
+
+        if (!sourceCanvas || !offsetCanvas) {
+          console.warn(`[PROCESS] Frame ${frame}: Missing canvas - source: ${!!sourceCanvas}, offset: ${!!offsetCanvas}`);
+          continue;
+        }
+
+        console.log(`[PROCESS] Frame ${frame}: Both frames obtained, compositing...`);
 
         // Clear canvas
         ctx.globalCompositeOperation = 'source-over';
         ctx.globalAlpha = 1;
 
-        // Draw original video (A)
-        ctx.drawImage(sourceVideo, 0, 0, width, height);
-        console.log(`[PROCESS] Frame ${frame}: Source video drawn`);
+        // Draw original frame (A)
+        ctx.drawImage(sourceCanvas, 0, 0, width, height);
+        console.log(`[PROCESS] Frame ${frame}: Source frame drawn`);
 
-        // __Decision: Using canvas filter for color inversion instead of pixel manipulation__
+        // Draw inverted, offset frame (B) with 50% opacity
         ctx.save();
         ctx.globalCompositeOperation = 'source-over';
         ctx.globalAlpha = 0.5;
         ctx.filter = 'invert(1)';
-
-        // Draw inverted, offset video (B) with 50% opacity
-        ctx.drawImage(offsetVideo, 0, 0, width, height);
+        ctx.drawImage(offsetCanvas, 0, 0, width, height);
         ctx.restore();
-        console.log(`[PROCESS] Frame ${frame}: Offset video drawn with filter`);
+        console.log(`[PROCESS] Frame ${frame}: Offset frame drawn with filter`);
 
         // Add frame to output
         console.log(`[PROCESS] Frame ${frame}: Adding frame to canvas source...`);
@@ -346,8 +312,6 @@ export default function Home() {
         setProgress(progressPercent);
         console.log(`[PROCESS] Frame ${frame}: Progress updated to ${progressPercent.toFixed(1)}%`);
       }
-
-      console.log('[PROCESS] All frames processed, closing canvas source...');
 
       console.log('[PROCESS] All frames processed, closing canvas source...');
       canvasSource.close();
@@ -362,13 +326,6 @@ export default function Home() {
 
       const resultUrl = URL.createObjectURL(resultBlob);
       console.log('[PROCESS] Result URL created:', resultUrl);
-
-      // Cleanup
-      console.log('[PROCESS] Cleaning up resources...');
-      URL.revokeObjectURL(videoUrl);
-      sourceVideo.remove();
-      offsetVideo.remove();
-      console.log('[PROCESS] Cleanup completed');
 
       console.log('[PROCESS] =================================');
       console.log('[PROCESS] Video processing completed successfully!');
