@@ -259,7 +259,37 @@ export default function Home() {
           transition={{ duration: 0.3, ease: "easeOut" }}
           className="w-full max-w-2xl"
         >
-          {!videoUrl ? (
+          {videoUrl ? (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.1 }}
+              className="space-y-4"
+            >
+              <div className="rounded-lg overflow-hidden shadow-2xl bg-black">
+                <video
+                  ref={videoRef}
+                  src={videoUrl}
+                  controls
+                  className="w-full"
+                />
+              </div>
+              <motion.button
+                whileHover={{ scale: 1.01 }}
+                whileTap={{ scale: 0.99 }}
+                onClick={handleReset}
+                className={clsx(
+                  "w-full bg-gray-900 hover:bg-gray-800 text-white py-3 rounded-lg",
+                  "transition-all duration-200 shadow-md hover:shadow-lg",
+                  "flex items-center justify-center gap-2 font-medium",
+                  "bg-gradient-to-b from-gray-800 to-gray-900"
+                )}
+              >
+                <RotateCcw className="w-4 h-4" />
+                Process another video
+              </motion.button>
+            </motion.div>
+          ) : (
             <>
               <input
                 ref={fileInputRef}
@@ -448,36 +478,6 @@ export default function Home() {
                 )}
               </motion.div>
             </>
-          ) : (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.1 }}
-              className="space-y-4"
-            >
-              <div className="rounded-lg overflow-hidden shadow-2xl bg-black">
-                <video
-                  ref={videoRef}
-                  src={videoUrl}
-                  controls
-                  className="w-full"
-                />
-              </div>
-              <motion.button
-                whileHover={{ scale: 1.01 }}
-                whileTap={{ scale: 0.99 }}
-                onClick={handleReset}
-                className={clsx(
-                  "w-full bg-gray-900 hover:bg-gray-800 text-white py-3 rounded-lg",
-                  "transition-all duration-200 shadow-md hover:shadow-lg",
-                  "flex items-center justify-center gap-2 font-medium",
-                  "bg-gradient-to-b from-gray-800 to-gray-900"
-                )}
-              >
-                <RotateCcw className="w-4 h-4" />
-                Process another video
-              </motion.button>
-            </motion.div>
           )}
         </motion.div>
       </AnimatePresence>
