@@ -9,12 +9,14 @@ import {
   QUALITY_HIGH,
   Input,
   BlobSource,
-  ALL_FORMATS
+  ALL_FORMATS,
+  CanvasSink
 } from "mediabunny";
 import { useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Upload, Film, RotateCcw, Play } from "lucide-react";
 import { Inter, JetBrains_Mono } from "next/font/google";
+import Image from "next/image";
 import clsx from "clsx";
 import { useVideoStore } from "../store/videoStore";
 
@@ -36,10 +38,14 @@ export default function Home() {
     selectedFile,
     videoUrl,
     frameOffset,
+    thumbnail,
+    frameRate,
     setIsDragging,
     setProgress,
     setSelectedFile,
     setFrameOffset,
+    setThumbnail,
+    setFrameRate,
     clearFile,
     reset,
     startProcessing,
@@ -54,6 +60,57 @@ export default function Home() {
   // Refs
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const generateThumbnail = async (file: File) => {
+    try {
+      const input = new Input({
+        source: new BlobSource(file),
+        formats: ALL_FORMATS,
+      });
+
+      const videoTrack = await input.getPrimaryVideoTrack();
+      if (!videoTrack) {
+        throw new Error('File has no video track.');
+      }
+
+      // Get frame rate
+      const packetStats = await videoTrack.computePacketStats();
+      const frameRate = Math.round(packetStats.averagePacketRate);
+      setFrameRate(frameRate);
+
+      // Generate thumbnail
+      const THUMBNAIL_SIZE = 400;
+      const width = videoTrack.displayWidth > videoTrack.displayHeight
+        ? THUMBNAIL_SIZE
+        : Math.floor(THUMBNAIL_SIZE * videoTrack.displayWidth / videoTrack.displayHeight);
+      const height = videoTrack.displayHeight > videoTrack.displayWidth
+        ? THUMBNAIL_SIZE
+        : Math.floor(THUMBNAIL_SIZE * videoTrack.displayHeight / videoTrack.displayWidth);
+
+      const sink = new CanvasSink(videoTrack, {
+        width: Math.floor(width * window.devicePixelRatio),
+        height: Math.floor(height * window.devicePixelRatio),
+        fit: 'fill',
+      });
+
+      const firstTimestamp = await videoTrack.getFirstTimestamp();
+
+      for await (const wrappedCanvas of sink.canvasesAtTimestamps([firstTimestamp])) {
+        if (wrappedCanvas) {
+          const canvas = wrappedCanvas.canvas as HTMLCanvasElement;
+          canvas.toBlob((blob) => {
+            if (blob) {
+              const thumbnailUrl = URL.createObjectURL(blob);
+              setThumbnail(thumbnailUrl);
+            }
+          });
+          break;
+        }
+      }
+    } catch (error) {
+      console.error('Error generating thumbnail:', error);
+    }
+  };
 
   const processVideo = async (file: File) => {
     startProcessing();
@@ -196,6 +253,7 @@ export default function Home() {
     const file = e.dataTransfer.files[0];
     if (file && file.type.startsWith("video/")) {
       setSelectedFile(file);
+      await generateThumbnail(file);
     }
   };
 
@@ -222,6 +280,7 @@ export default function Home() {
     const file = e.target.files?.[0];
     if (file?.type.startsWith("video/")) {
       setSelectedFile(file);
+      await generateThumbnail(file);
     }
   };
 
@@ -235,6 +294,10 @@ export default function Home() {
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+    // Clean up thumbnail URL to prevent memory leaks
+    if (thumbnail) {
+      URL.revokeObjectURL(thumbnail);
+    }
     reset();
   };
 
@@ -242,6 +305,10 @@ export default function Home() {
     if (canClear()) {
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
+      }
+      // Clean up thumbnail URL to prevent memory leaks
+      if (thumbnail) {
+        URL.revokeObjectURL(thumbnail);
       }
       clearFile();
     }
@@ -347,11 +414,24 @@ export default function Home() {
                         animate={{ opacity: 1 }}
                         className="space-y-3"
                       >
-                        <Film className="w-12 h-12 mx-auto text-green-600" />
+                        {thumbnail ? (
+                          <div className="w-16 h-16 mx-auto rounded-lg overflow-hidden border-2 border-green-200">
+                            <Image
+                              src={thumbnail}
+                              alt="Video thumbnail"
+                              width={64}
+                              height={64}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        ) : (
+                          <Film className="w-12 h-12 mx-auto text-green-600" />
+                        )}
                         <div>
                           <p className="font-medium text-gray-700">{selectedFile.name}</p>
                           <p className="text-sm text-gray-500">
-                            {(selectedFile.size / (1024 * 1024)).toFixed(1)} MB • Ready to process
+                            {(selectedFile.size / (1024 * 1024)).toFixed(1)} MB
+                            {frameRate && ` • ${frameRate} fps`} • Ready to process
                           </p>
                         </div>
                       </motion.div>

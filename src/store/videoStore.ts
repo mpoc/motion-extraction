@@ -9,6 +9,8 @@ type VideoState = {
   // File States
   selectedFile?: File;
   videoUrl?: string;
+  thumbnail?: string;
+  frameRate?: number;
 
   // Configuration
   frameOffset: number;
@@ -20,6 +22,8 @@ type VideoState = {
   setSelectedFile: (file?: File) => void;
   setVideoUrl: (url?: string) => void;
   setFrameOffset: (offset: number) => void;
+  setThumbnail: (thumbnail?: string) => void;
+  setFrameRate: (frameRate?: number) => void;
 
   // Compound Actions
   clearFile: () => void;
@@ -42,6 +46,8 @@ export const useVideoStore = create<VideoState>((set, get) => ({
   progress: 0,
   selectedFile: undefined,
   videoUrl: undefined,
+  thumbnail: undefined,
+  frameRate: undefined,
   frameOffset: 10,
 
   // Basic Actions
@@ -51,16 +57,22 @@ export const useVideoStore = create<VideoState>((set, get) => ({
   setSelectedFile: (selectedFile) => set({ selectedFile }),
   setVideoUrl: (videoUrl) => set({ videoUrl }),
   setFrameOffset: (frameOffset) => set({ frameOffset }),
+  setThumbnail: (thumbnail) => set({ thumbnail }),
+  setFrameRate: (frameRate) => set({ frameRate }),
 
   // Compound Actions
   clearFile: () => set({
     selectedFile: undefined,
+    thumbnail: undefined,
+    frameRate: undefined,
     isDragging: false
   }),
 
   reset: () => set({
     selectedFile: undefined,
     videoUrl: undefined,
+    thumbnail: undefined,
+    frameRate: undefined,
     frameOffset: 10,
     progress: 0,
     isProcessing: false,
