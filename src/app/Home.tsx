@@ -14,11 +14,12 @@ import {
 } from "mediabunny";
 import { useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Upload, Film, RotateCcw, Play } from "lucide-react";
+import { Upload, Film, RotateCcw, Play, AlertCircle } from "lucide-react";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import Image from "next/image";
 import clsx from "clsx";
 import { useVideoStore } from "../store/videoStore";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -40,12 +41,14 @@ export default function Home() {
     frameOffset,
     thumbnail,
     frameRate,
+    error,
     setIsDragging,
     setProgress,
     setSelectedFile,
     setFrameOffset,
     setThumbnail,
     setFrameRate,
+    setError,
     clearFile,
     reset,
     startProcessing,
@@ -109,6 +112,7 @@ export default function Home() {
       }
     } catch (error) {
       console.error('Error generating thumbnail:', error);
+      setError(`Failed to generate thumbnail: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -246,7 +250,7 @@ export default function Home() {
 
     } catch (error) {
       console.error('Error processing video:', error);
-      alert('Error processing video: ' + error);
+      setError(`Failed to process video: ${error instanceof Error ? error.message : 'Unknown error'}`);
       finishProcessing(''); // Reset processing state on error
     }
   };
@@ -258,10 +262,19 @@ export default function Home() {
     if (!canUpload()) return;
 
     const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith("video/")) {
-      setSelectedFile(file);
-      await generateThumbnail(file);
+    if (!file) {
+      setError('No file was dropped');
+      return;
     }
+
+    if (!file.type.startsWith("video/")) {
+      setError('Please select a valid video file (MP4, MOV, WebM, etc.)');
+      return;
+    }
+
+    setError(undefined); // Clear any previous errors
+    setSelectedFile(file);
+    await generateThumbnail(file);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -285,14 +298,24 @@ export default function Home() {
     if (!canUpload()) return;
 
     const file = e.target.files?.[0];
-    if (file?.type.startsWith("video/")) {
-      setSelectedFile(file);
-      await generateThumbnail(file);
+    if (!file) {
+      setError('No file was selected');
+      return;
     }
+
+    if (!file.type.startsWith("video/")) {
+      setError('Please select a valid video file (MP4, MOV, WebM, etc.)');
+      return;
+    }
+
+    setError(undefined); // Clear any previous errors
+    setSelectedFile(file);
+    await generateThumbnail(file);
   };
 
   const handleProcessVideo = async () => {
     if (canProcess() && selectedFile) {
+      setError(undefined); // Clear any previous errors
       await processVideo(selectedFile);
     }
   };
@@ -319,6 +342,10 @@ export default function Home() {
       }
       clearFile();
     }
+  };
+
+  const handleDismissError = () => {
+    setError(undefined);
   };  return (
     <div className={clsx(
       "min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-8",
@@ -395,6 +422,23 @@ export default function Home() {
                 animate={{ opacity: 1, y: 0 }}
                 className="space-y-6"
               >
+                {/* Error Alert */}
+                {error && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="cursor-pointer"
+                    onClick={handleDismissError}
+                  >
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertTitle>Error</AlertTitle>
+                      <AlertDescription>{error}</AlertDescription>
+                    </Alert>
+                  </motion.div>
+                )}
+
                 {/* Upload Section */}
                 <motion.div
                   animate={{

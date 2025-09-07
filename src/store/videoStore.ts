@@ -5,6 +5,7 @@ type VideoState = {
   isDragging: boolean;
   isProcessing: boolean;
   progress: number;
+  error?: string;
 
   // File States
   selectedFile?: File;
@@ -24,6 +25,7 @@ type VideoState = {
   setFrameOffset: (offset: number) => void;
   setThumbnail: (thumbnail?: string) => void;
   setFrameRate: (frameRate?: number) => void;
+  setError: (error?: string) => void;
 
   // Compound Actions
   clearFile: () => void;
@@ -44,6 +46,7 @@ export const useVideoStore = create<VideoState>((set, get) => ({
   isDragging: false,
   isProcessing: false,
   progress: 0,
+  error: undefined,
   selectedFile: undefined,
   videoUrl: undefined,
   thumbnail: undefined,
@@ -59,13 +62,15 @@ export const useVideoStore = create<VideoState>((set, get) => ({
   setFrameOffset: (frameOffset) => set({ frameOffset }),
   setThumbnail: (thumbnail) => set({ thumbnail }),
   setFrameRate: (frameRate) => set({ frameRate }),
+  setError: (error) => set({ error }),
 
   // Compound Actions
   clearFile: () => set({
     selectedFile: undefined,
     thumbnail: undefined,
     frameRate: undefined,
-    isDragging: false
+    isDragging: false,
+    error: undefined
   }),
 
   reset: () => set({
@@ -76,25 +81,29 @@ export const useVideoStore = create<VideoState>((set, get) => ({
     frameOffset: 10,
     progress: 0,
     isProcessing: false,
-    isDragging: false
+    isDragging: false,
+    error: undefined
   }),
 
   startProcessing: () => set({
     isProcessing: true,
     progress: 0,
-    isDragging: false
+    isDragging: false,
+    error: undefined
   }),
 
   finishProcessing: (videoUrl) => set({
     isProcessing: false,
     progress: 0,
-    videoUrl
+    videoUrl,
+    error: undefined
   }),
 
   backToSettings: () => set({
     videoUrl: undefined,
     progress: 0,
-    isProcessing: false
+    isProcessing: false,
+    error: undefined
   }),
 
   // Computed States (Business Logic)
