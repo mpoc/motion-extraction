@@ -6,7 +6,10 @@ import {
   Mp4OutputFormat,
   CanvasSource,
   getFirstEncodableVideoCodec,
-  QUALITY_HIGH
+  QUALITY_HIGH,
+  Input,
+  BlobSource,
+  ALL_FORMATS
 } from "mediabunny";
 import { useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -55,6 +58,24 @@ export default function Home() {
     startProcessing();
 
     try {
+      // Extract frame rate using MediaBunny
+      const input = new Input({
+        source: new BlobSource(file),
+        formats: ALL_FORMATS,
+      });
+
+      const tracks = await input.getTracks();
+      const videoTrack = tracks.find(track => track.isVideoTrack());
+
+      if (!videoTrack) {
+        throw new Error('No video track found in the file.');
+      }
+
+      const packetStats = await videoTrack.computePacketStats();
+      const frameRate = packetStats.averagePacketRate; // This is the actual FPS
+
+      console.log(`Extracted frame rate: ${frameRate} fps`);
+
       // __Decision: Using video elements for decoding instead of ffmpeg__
       const videoUrl = URL.createObjectURL(file);
 
@@ -74,7 +95,6 @@ export default function Home() {
 
       const width = sourceVideo.videoWidth;
       const height = sourceVideo.videoHeight;
-      const frameRate = 30; // __Assumption: 30fps, could be extracted from metadata if needed__
       const frameDuration = 1 / frameRate;
 
       // Create OffscreenCanvas for compositing
