@@ -1,10 +1,16 @@
 "use client";
 
-import { FFmpeg } from "@ffmpeg/ffmpeg";
-import { fetchFile, toBlobURL } from "@ffmpeg/util";
+import {
+  Output,
+  BufferTarget,
+  Mp4OutputFormat,
+  CanvasSource,
+  getFirstEncodableVideoCodec,
+  QUALITY_HIGH
+} from "mediabunny";
 import { useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Upload, Film, Loader2, RotateCcw } from "lucide-react";
+import { Upload, Film, RotateCcw } from "lucide-react";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import clsx from "clsx";
 
@@ -19,61 +25,134 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export default function Home() {
-  const [loaded, setLoaded] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const ffmpegRef = useRef(new FFmpeg());
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [progress, setProgress] = useState(0);
-  const useMultiThreaded = false;
 
-  const load = async () => {
-    setIsLoading(true);
-    const baseURL = `https://unpkg.com/@ffmpeg/core${useMultiThreaded ? "-mt" : ""}@0.12.10/dist/umd`;
-    const ffmpeg = ffmpegRef.current;
-    ffmpeg.on("log", ({ message }) => {
-      console.log("FFmpeg log:", message);
-    });
-    ffmpeg.on("progress", (progressEvent) => {
-      console.log("Progress:", progressEvent);
-      setProgress(progressEvent.progress * 100);
-    });
-    // toBlobURL is used to bypass CORS issue, urls with the same
-    // domain can be used directly.
-    await ffmpeg.load({
-      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
-      workerURL: useMultiThreaded ? await toBlobURL(`${baseURL}/ffmpeg-core.worker.js`, "text/javascript") : undefined,
-    });
-    setLoaded(true);
-    setIsLoading(false);
-  };
+  // __Assumption: Using two video elements for frame offset handling__
+  const sourceVideoRef = useRef<HTMLVideoElement | null>(null);
+  const offsetVideoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const processVideo = async (file: File) => {
     setIsProcessing(true);
     setProgress(0);
-    const ffmpeg = ffmpegRef.current;
 
-    await ffmpeg.writeFile("input.mp4", await fetchFile(file));
-    const threads = useMultiThreaded ? ["-threads", "4"] : [];
-    // Invert colors using negate filter
-    // await ffmpeg.exec(["-i", "input.mp4", "-c", "copy", ...threads, "output.mp4"]);
-    // await ffmpeg.exec(["-i", "input.mp4", "-vf", "negate", "-c:a", "copy", ...threads, "output.mp4"]);
-    await ffmpeg.exec([
-      "-i", "input.mp4",
-      // "-filter_complex", "[0:v]split[a][b];[b]setpts=PTS+(10/FR/TB),negate,format=rgba,colorchannelmixer=aa=0.5[c];[a][c]overlay=eof_action=pass",
-      "-filter_complex", "[0:v]split[a][b];[b]setpts=PTS+(10/FR/TB),negate,format=rgba,colorchannelmixer=aa=0.5[c];[a][c]overlay=eof_action=pass,eq=brightness=-0.5",
-      // ...threads,
-      "output.mp4"
-    ]);
+    try {
+      // __Decision: Using video elements for decoding instead of ffmpeg__
+      const videoUrl = URL.createObjectURL(file);
 
-    const data = await ffmpeg.readFile("output.mp4");
-    // @ts-expect-error as Uint8Array
-    const url = URL.createObjectURL(new Blob([(data as Uint8Array).buffer], { type: "video/mp4" }));
-    setVideoUrl(url);
+      // Create and setup source videos
+      const sourceVideo = document.createElement('video');
+      const offsetVideo = document.createElement('video');
+      sourceVideo.src = videoUrl;
+      offsetVideo.src = videoUrl;
+      sourceVideo.muted = true;
+      offsetVideo.muted = true;
+
+      // Wait for videos to load metadata
+      await Promise.all([
+        new Promise((resolve) => sourceVideo.addEventListener('loadedmetadata', resolve, { once: true })),
+        new Promise((resolve) => offsetVideo.addEventListener('loadedmetadata', resolve, { once: true }))
+      ]);
+
+      const width = sourceVideo.videoWidth;
+      const height = sourceVideo.videoHeight;
+      const frameRate = 30; // __Assumption: 30fps, could be extracted from metadata if needed__
+      const frameOffset = 10;
+      const frameDuration = 1 / frameRate;
+
+      // Create canvas for compositing
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d', { alpha: false })!;
+
+      // Setup mediabunny output
+      const output = new Output({
+        target: new BufferTarget(),
+        format: new Mp4OutputFormat(),
+      });
+
+      const videoCodec = await getFirstEncodableVideoCodec(output.format.getSupportedVideoCodecs(), {
+        width,
+        height,
+      });
+
+      if (!videoCodec) {
+        throw new Error('Your browser doesn\'t support video encoding.');
+      }
+
+      const canvasSource = new CanvasSource(canvas, {
+        codec: videoCodec,
+        bitrate: QUALITY_HIGH,
+      });
+
+      output.addVideoTrack(canvasSource, { frameRate });
+      await output.start();
+
+      const totalFrames = Math.floor(sourceVideo.duration * frameRate);
+
+      // __Decision: Using requestVideoFrameCallback if available, otherwise setTimeout__
+      for (let frame = 0; frame < totalFrames; frame++) {
+        const currentTime = frame / frameRate;
+        const offsetTime = Math.max(0, currentTime - (frameOffset / frameRate));
+
+        // Seek both videos
+        sourceVideo.currentTime = currentTime;
+        offsetVideo.currentTime = offsetTime;
+
+        // Wait for seek to complete
+        await Promise.all([
+          new Promise((resolve) => sourceVideo.addEventListener('seeked', resolve, { once: true })),
+          new Promise((resolve) => offsetVideo.addEventListener('seeked', resolve, { once: true }))
+        ]);
+
+        // Clear canvas
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+
+        // Draw original video (A)
+        ctx.drawImage(sourceVideo, 0, 0, width, height);
+
+        // __Decision: Using canvas filter for color inversion instead of pixel manipulation__
+        ctx.save();
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 0.5;
+        ctx.filter = 'invert(1)';
+
+        // Draw inverted, offset video (B) with 50% opacity
+        ctx.drawImage(offsetVideo, 0, 0, width, height);
+        ctx.restore();
+
+        // Add frame to output
+        await canvasSource.add(currentTime, frameDuration);
+
+        // Update progress
+        setProgress((frame / totalFrames) * 100);
+      }
+
+      canvasSource.close();
+      await output.finalize();
+
+      // Create result video URL
+      const resultBlob = new Blob([output.target.buffer!], { type: output.format.mimeType });
+      const resultUrl = URL.createObjectURL(resultBlob);
+      setVideoUrl(resultUrl);
+
+      // Cleanup
+      URL.revokeObjectURL(videoUrl);
+      sourceVideo.remove();
+      offsetVideo.remove();
+
+    } catch (error) {
+      console.error('Error processing video:', error);
+      alert('Error processing video: ' + error);
+    }
+
     setIsProcessing(false);
     setProgress(0);
   };
@@ -118,33 +197,7 @@ export default function Home() {
       "font-sans"
     )}>
       <AnimatePresence mode="wait">
-        {!loaded ? (
-          <motion.button
-            key="load"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.3, ease: "easeOut" }}
-            className={clsx(
-              "flex items-center gap-3 bg-gray-900 hover:bg-gray-800",
-              "text-white px-8 py-4 rounded-lg transition-all duration-200",
-              "shadow-lg hover:shadow-xl transform hover:-translate-y-0.5",
-              "bg-gradient-to-b from-gray-800 to-gray-900"
-            )}
-            onClick={load}
-          >
-            <span className="font-medium">Initialize FFmpeg</span>
-            {isLoading && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.2 }}
-              >
-                <Loader2 className="w-5 h-5 animate-spin" />
-              </motion.div>
-            )}
-          </motion.button>
-        ) : (
+        {true && (
           <motion.div
             key="processor"
             initial={{ opacity: 0, scale: 0.95 }}
