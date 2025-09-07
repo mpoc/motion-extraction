@@ -1,0 +1,25 @@
+{
+  "name": "Motion Extraction",
+  "short_name": "Motion Extract",
+  "description": "Extract motion from videos with frame offset technique",
+  "theme_color": "#111827",
+  "background_color": "#f9fafb",
+  "display": "standalone",
+  "orientation": "portrait",
+  "scope": "/",
+  "start_url": "/",
+  "icons": [
+    {
+      "src": "/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
