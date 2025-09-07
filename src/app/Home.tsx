@@ -1,5 +1,6 @@
 "use client";
 
+import 'context-filter-polyfill';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import clsx from "clsx";
 import { AnimatePresence, motion } from "framer-motion";
