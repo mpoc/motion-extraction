@@ -245,9 +245,9 @@ export default function Home() {
       // Process frames using MediaBunny iterators instead of video element seeking
       console.log('[PROCESS] Starting frame processing loop...');
       for (let frame = 0; frame < totalFrames; frame++) {
-        if (frame % 60 === 0) { // Log every 60th frame to avoid spam
-          console.log(`[PROCESS] Processing frame ${frame}/${totalFrames} (${((frame/totalFrames)*100).toFixed(1)}%)`);
-        }
+        // if (frame % 60 === 0) { // Log every 60th frame to avoid spam
+        //   console.log(`[PROCESS] Processing frame ${frame}/${totalFrames} (${((frame/totalFrames)*100).toFixed(1)}%)`);
+        // }
 
         const currentTime = frame / frameRate;
         const offsetTime = Math.max(0, currentTime - (frameOffset / frameRate));
@@ -283,7 +283,7 @@ export default function Home() {
           continue;
         }
 
-        console.log(`[PROCESS] Frame ${frame}: Both frames obtained, compositing...`);
+        // console.log(`[PROCESS] Frame ${frame}: Both frames obtained, compositing...`);
 
         // Clear canvas
         ctx.globalCompositeOperation = 'source-over';
@@ -291,7 +291,7 @@ export default function Home() {
 
         // Draw original frame (A)
         ctx.drawImage(sourceCanvas, 0, 0, width, height);
-        console.log(`[PROCESS] Frame ${frame}: Source frame drawn`);
+        // console.log(`[PROCESS] Frame ${frame}: Source frame drawn`);
 
         // Draw inverted, offset frame (B) with 50% opacity
         ctx.save();
@@ -300,17 +300,17 @@ export default function Home() {
         ctx.filter = 'invert(1)';
         ctx.drawImage(offsetCanvas, 0, 0, width, height);
         ctx.restore();
-        console.log(`[PROCESS] Frame ${frame}: Offset frame drawn with filter`);
+        // console.log(`[PROCESS] Frame ${frame}: Offset frame drawn with filter`);
 
         // Add frame to output
-        console.log(`[PROCESS] Frame ${frame}: Adding frame to canvas source...`);
+        // console.log(`[PROCESS] Frame ${frame}: Adding frame to canvas source...`);
         await canvasSource.add(currentTime, frameDuration);
-        console.log(`[PROCESS] Frame ${frame}: Frame added to output`);
+        // console.log(`[PROCESS] Frame ${frame}: Frame added to output`);
 
         // Update progress
         const progressPercent = (frame / totalFrames) * 100;
         setProgress(progressPercent);
-        console.log(`[PROCESS] Frame ${frame}: Progress updated to ${progressPercent.toFixed(1)}%`);
+        // console.log(`[PROCESS] Frame ${frame}: Progress updated to ${progressPercent.toFixed(1)}%`);
       }
 
       console.log('[PROCESS] All frames processed, closing canvas source...');
