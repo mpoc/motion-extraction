@@ -65,23 +65,34 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const generateThumbnail = async (file: File) => {
+    console.log('[THUMBNAIL] Starting thumbnail generation for file:', file.name, 'size:', file.size);
     try {
+      console.log('[THUMBNAIL] Creating MediaBunny Input...');
       const input = new Input({
         source: new BlobSource(file),
         formats: ALL_FORMATS,
       });
 
+      console.log('[THUMBNAIL] Getting primary video track...');
       const videoTrack = await input.getPrimaryVideoTrack();
       if (!videoTrack) {
+        console.error('[THUMBNAIL] No video track found');
         throw new Error('File has no video track.');
       }
+      console.log('[THUMBNAIL] Video track found:', {
+        width: videoTrack.displayWidth,
+        height: videoTrack.displayHeight
+      });
 
       // Get frame rate
+      console.log('[THUMBNAIL] Computing packet stats...');
       const packetStats = await videoTrack.computePacketStats();
       const frameRate = Math.round(packetStats.averagePacketRate);
+      console.log('[THUMBNAIL] Frame rate calculated:', frameRate);
       setFrameRate(frameRate);
 
       // Generate thumbnail
+      console.log('[THUMBNAIL] Creating canvas sink...');
       const THUMBNAIL_SIZE = 400;
       const width = videoTrack.displayWidth > videoTrack.displayHeight
         ? THUMBNAIL_SIZE
@@ -90,58 +101,86 @@ export default function Home() {
         ? THUMBNAIL_SIZE
         : Math.floor(THUMBNAIL_SIZE * videoTrack.displayHeight / videoTrack.displayWidth);
 
+      console.log('[THUMBNAIL] Canvas dimensions:', { width, height, devicePixelRatio: window.devicePixelRatio });
       const sink = new CanvasSink(videoTrack, {
         width: Math.floor(width * window.devicePixelRatio),
         height: Math.floor(height * window.devicePixelRatio),
         fit: 'fill',
       });
 
+      console.log('[THUMBNAIL] Getting first timestamp...');
       const firstTimestamp = await videoTrack.getFirstTimestamp();
+      console.log('[THUMBNAIL] First timestamp:', firstTimestamp);
 
+      console.log('[THUMBNAIL] Generating canvas at timestamp...');
       for await (const wrappedCanvas of sink.canvasesAtTimestamps([firstTimestamp])) {
+        console.log('[THUMBNAIL] Canvas generated:', !!wrappedCanvas);
         if (wrappedCanvas) {
           const canvas = wrappedCanvas.canvas as HTMLCanvasElement;
+          console.log('[THUMBNAIL] Converting canvas to blob...');
           canvas.toBlob((blob) => {
+            console.log('[THUMBNAIL] Blob created:', !!blob, blob?.size);
             if (blob) {
               const thumbnailUrl = URL.createObjectURL(blob);
+              console.log('[THUMBNAIL] Thumbnail URL created:', thumbnailUrl);
               setThumbnail(thumbnailUrl);
             }
           });
           break;
         }
       }
+      console.log('[THUMBNAIL] Thumbnail generation completed');
     } catch (error) {
-      console.error('Error generating thumbnail:', error);
+      console.error('[THUMBNAIL] Error generating thumbnail:', error);
       setError(`Failed to generate thumbnail: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
   const processVideo = async (file: File) => {
+    console.log('[PROCESS] =================================');
+    console.log('[PROCESS] Starting video processing for:', file.name);
+    console.log('[PROCESS] File size:', file.size, 'bytes');
+    console.log('[PROCESS] File type:', file.type);
+    console.log('[PROCESS] Frame offset:', frameOffset);
+    console.log('[PROCESS] User agent:', navigator.userAgent);
+    console.log('[PROCESS] =================================');
+
     startProcessing();
 
     try {
       // Extract frame rate using MediaBunny
+      console.log('[PROCESS] Creating MediaBunny Input...');
       const input = new Input({
         source: new BlobSource(file),
         formats: ALL_FORMATS,
       });
 
+      console.log('[PROCESS] Getting tracks...');
       const tracks = await input.getTracks();
+      console.log('[PROCESS] Found tracks:', tracks.length);
+
       const videoTrack = tracks.find(track => track.isVideoTrack());
+      console.log('[PROCESS] Video track found:', !!videoTrack);
 
       if (!videoTrack) {
+        console.error('[PROCESS] No video track found in tracks:', tracks);
         throw new Error('No video track found in the file.');
       }
 
+      console.log('[PROCESS] Computing packet stats...');
       const packetStats = await videoTrack.computePacketStats();
       const frameRate = packetStats.averagePacketRate; // This is the actual FPS
+      console.log('[PROCESS] Extracted frame rate:', frameRate, 'fps');
 
       console.log(`Extracted frame rate: ${frameRate} fps`);
 
       // __Decision: Using video elements for decoding instead of ffmpeg__
+      console.log('[PROCESS] Creating object URL for video...');
       const videoUrl = URL.createObjectURL(file);
+      console.log('[PROCESS] Video URL created:', videoUrl);
 
       // Create and setup source videos
+      console.log('[PROCESS] Creating video elements...');
       const sourceVideo = document.createElement('video');
       const offsetVideo = document.createElement('video');
       sourceVideo.src = videoUrl;
@@ -149,66 +188,134 @@ export default function Home() {
       sourceVideo.muted = true;
       offsetVideo.muted = true;
 
+      console.log('[PROCESS] Video elements created, waiting for metadata...');
+
       // Wait for videos to load metadata
       await Promise.all([
-        new Promise((resolve) => sourceVideo.addEventListener('loadedmetadata', resolve, { once: true })),
-        new Promise((resolve) => offsetVideo.addEventListener('loadedmetadata', resolve, { once: true }))
+        new Promise((resolve) => {
+          console.log('[PROCESS] Setting up source video metadata listener...');
+          sourceVideo.addEventListener('loadedmetadata', () => {
+            console.log('[PROCESS] Source video metadata loaded:', {
+              videoWidth: sourceVideo.videoWidth,
+              videoHeight: sourceVideo.videoHeight,
+              duration: sourceVideo.duration
+            });
+            resolve(undefined);
+          }, { once: true });
+        }),
+        new Promise((resolve) => {
+          console.log('[PROCESS] Setting up offset video metadata listener...');
+          offsetVideo.addEventListener('loadedmetadata', () => {
+            console.log('[PROCESS] Offset video metadata loaded');
+            resolve(undefined);
+          }, { once: true });
+        })
       ]);
+
+      console.log('[PROCESS] Both videos metadata loaded');
 
       const width = sourceVideo.videoWidth;
       const height = sourceVideo.videoHeight;
       const frameDuration = 1 / frameRate;
 
+      console.log('[PROCESS] Video dimensions:', { width, height });
+      console.log('[PROCESS] Frame duration:', frameDuration);
+      console.log('[PROCESS] Video duration:', sourceVideo.duration);
+
       // Create OffscreenCanvas for compositing (fallback to regular canvas if not supported)
-      const canvas = typeof OffscreenCanvas === 'undefined'
-        ? (() => {
+      console.log('[PROCESS] Checking OffscreenCanvas support...');
+      const hasOffscreenCanvas = typeof OffscreenCanvas !== 'undefined';
+      console.log('[PROCESS] OffscreenCanvas supported:', hasOffscreenCanvas);
+
+      const canvas = hasOffscreenCanvas
+        ? new OffscreenCanvas(width, height)
+        : (() => {
+            console.log('[PROCESS] Creating regular canvas fallback...');
             const regularCanvas = document.createElement('canvas');
             regularCanvas.width = width;
             regularCanvas.height = height;
             return regularCanvas;
-          })()
-        : new OffscreenCanvas(width, height);
+          })();
+
+      console.log('[PROCESS] Canvas created:', { width: canvas.width, height: canvas.height });
+
       const ctx = canvas.getContext('2d', { alpha: false }) as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+      console.log('[PROCESS] Canvas context created:', !!ctx);
 
       // Setup mediabunny output
+      console.log('[PROCESS] Setting up MediaBunny output...');
       const output = new Output({
         target: new BufferTarget(),
         format: new Mp4OutputFormat(),
       });
 
+      console.log('[PROCESS] Getting video codec...');
       const videoCodec = await getFirstEncodableVideoCodec(output.format.getSupportedVideoCodecs(), {
         width,
         height,
       });
+      console.log('[PROCESS] Video codec found:', !!videoCodec, videoCodec);
 
       if (!videoCodec) {
+        console.error('[PROCESS] No video codec available');
         throw new Error('Your browser doesn\'t support video encoding.');
       }
 
+      console.log('[PROCESS] Creating canvas source...');
       const canvasSource = new CanvasSource(canvas, {
         codec: videoCodec,
         bitrate: QUALITY_HIGH,
       });
 
+      console.log('[PROCESS] Adding video track to output...');
       output.addVideoTrack(canvasSource, { frameRate });
+
+      console.log('[PROCESS] Starting output...');
       await output.start();
+      console.log('[PROCESS] Output started successfully');
 
       const totalFrames = Math.floor(sourceVideo.duration * frameRate);
+      console.log('[PROCESS] Total frames to process:', totalFrames);
 
       // __Decision: Using requestVideoFrameCallback if available, otherwise setTimeout__
+      console.log('[PROCESS] Starting frame processing loop...');
       for (let frame = 0; frame < totalFrames; frame++) {
+        if (frame % 10 === 0) { // Log every 10th frame to avoid spam
+          console.log(`[PROCESS] Processing frame ${frame}/${totalFrames} (${((frame/totalFrames)*100).toFixed(1)}%)`);
+        }
+
         const currentTime = frame / frameRate;
         const offsetTime = Math.max(0, currentTime - (frameOffset / frameRate));
 
+        if (frame === 0) {
+          console.log('[PROCESS] First frame times:', { currentTime, offsetTime, frameOffset });
+        }
+
         // Seek both videos
+        console.log(`[PROCESS] Frame ${frame}: Seeking to times:`, { currentTime, offsetTime });
         sourceVideo.currentTime = currentTime;
         offsetVideo.currentTime = offsetTime;
 
         // Wait for seek to complete
+        console.log(`[PROCESS] Frame ${frame}: Waiting for seek completion...`);
         await Promise.all([
-          new Promise((resolve) => sourceVideo.addEventListener('seeked', resolve, { once: true })),
-          new Promise((resolve) => offsetVideo.addEventListener('seeked', resolve, { once: true }))
+          new Promise((resolve) => {
+            const onSeeked = () => {
+              console.log(`[PROCESS] Frame ${frame}: Source video seeked to ${sourceVideo.currentTime}`);
+              resolve(undefined);
+            };
+            sourceVideo.addEventListener('seeked', onSeeked, { once: true });
+          }),
+          new Promise((resolve) => {
+            const onSeeked = () => {
+              console.log(`[PROCESS] Frame ${frame}: Offset video seeked to ${offsetVideo.currentTime}`);
+              resolve(undefined);
+            };
+            offsetVideo.addEventListener('seeked', onSeeked, { once: true });
+          })
         ]);
+
+        console.log(`[PROCESS] Frame ${frame}: Both videos seeked, drawing to canvas...`);
 
         // Clear canvas
         ctx.globalCompositeOperation = 'source-over';
@@ -216,6 +323,7 @@ export default function Home() {
 
         // Draw original video (A)
         ctx.drawImage(sourceVideo, 0, 0, width, height);
+        console.log(`[PROCESS] Frame ${frame}: Source video drawn`);
 
         // __Decision: Using canvas filter for color inversion instead of pixel manipulation__
         ctx.save();
@@ -226,52 +334,82 @@ export default function Home() {
         // Draw inverted, offset video (B) with 50% opacity
         ctx.drawImage(offsetVideo, 0, 0, width, height);
         ctx.restore();
+        console.log(`[PROCESS] Frame ${frame}: Offset video drawn with filter`);
 
         // Add frame to output
+        console.log(`[PROCESS] Frame ${frame}: Adding frame to canvas source...`);
         await canvasSource.add(currentTime, frameDuration);
+        console.log(`[PROCESS] Frame ${frame}: Frame added to output`);
 
         // Update progress
-        setProgress((frame / totalFrames) * 100);
+        const progressPercent = (frame / totalFrames) * 100;
+        setProgress(progressPercent);
+        console.log(`[PROCESS] Frame ${frame}: Progress updated to ${progressPercent.toFixed(1)}%`);
       }
 
+      console.log('[PROCESS] All frames processed, closing canvas source...');
+
+      console.log('[PROCESS] All frames processed, closing canvas source...');
       canvasSource.close();
+      console.log('[PROCESS] Canvas source closed, finalizing output...');
       await output.finalize();
+      console.log('[PROCESS] Output finalized');
 
       // Create result video URL
+      console.log('[PROCESS] Creating result blob...');
       const resultBlob = new Blob([output.target.buffer!], { type: output.format.mimeType });
+      console.log('[PROCESS] Result blob created:', { size: resultBlob.size, type: resultBlob.type });
+
       const resultUrl = URL.createObjectURL(resultBlob);
+      console.log('[PROCESS] Result URL created:', resultUrl);
 
       // Cleanup
+      console.log('[PROCESS] Cleaning up resources...');
       URL.revokeObjectURL(videoUrl);
       sourceVideo.remove();
       offsetVideo.remove();
+      console.log('[PROCESS] Cleanup completed');
 
+      console.log('[PROCESS] =================================');
+      console.log('[PROCESS] Video processing completed successfully!');
+      console.log('[PROCESS] =================================');
       finishProcessing(resultUrl);
 
     } catch (error) {
-      console.error('Error processing video:', error);
+      console.error('[PROCESS] =================================');
+      console.error('[PROCESS] ERROR during video processing:', error);
+      console.error('[PROCESS] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+      console.error('[PROCESS] =================================');
       setError(`Failed to process video: ${error instanceof Error ? error.message : 'Unknown error'}`);
       finishProcessing(''); // Reset processing state on error
     }
   };
 
   const handleDrop = async (e: React.DragEvent) => {
+    console.log('[UI] File drop event triggered');
     e.preventDefault();
     setIsDragging(false);
 
-    if (!canUpload()) return;
+    if (!canUpload()) {
+      console.log('[UI] Upload not allowed, ignoring drop');
+      return;
+    }
 
     const file = e.dataTransfer.files[0];
+    console.log('[UI] Dropped file:', file?.name, file?.type, file?.size);
     if (!file) {
+      console.log('[UI] No file in drop event');
       setError('No file was dropped');
       return;
     }
 
     if (!file.type.startsWith("video/")) {
+      console.log('[UI] Invalid file type:', file.type);
       setError('Please select a valid video file (MP4, MOV, WebM, etc.)');
       return;
     }
 
+    console.log('[UI] Valid video file dropped, proceeding...');
     setError(undefined); // Clear any previous errors
     setSelectedFile(file);
     await generateThumbnail(file);
@@ -295,52 +433,74 @@ export default function Home() {
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!canUpload()) return;
+    console.log('[UI] File input change event triggered');
+    if (!canUpload()) {
+      console.log('[UI] Upload not allowed, ignoring file select');
+      return;
+    }
 
     const file = e.target.files?.[0];
+    console.log('[UI] Selected file:', file?.name, file?.type, file?.size);
     if (!file) {
+      console.log('[UI] No file selected');
       setError('No file was selected');
       return;
     }
 
     if (!file.type.startsWith("video/")) {
+      console.log('[UI] Invalid file type:', file.type);
       setError('Please select a valid video file (MP4, MOV, WebM, etc.)');
       return;
     }
 
+    console.log('[UI] Valid video file selected, proceeding...');
     setError(undefined); // Clear any previous errors
     setSelectedFile(file);
     await generateThumbnail(file);
   };
 
   const handleProcessVideo = async () => {
+    console.log('[UI] Process video button clicked');
+    console.log('[UI] Can process:', canProcess());
+    console.log('[UI] Selected file:', selectedFile?.name);
+    console.log('[UI] Frame offset:', frameOffset);
+
     if (canProcess() && selectedFile) {
+      console.log('[UI] Starting video processing...');
       setError(undefined); // Clear any previous errors
       await processVideo(selectedFile);
+    } else {
+      console.log('[UI] Cannot process - missing requirements');
     }
   };
 
   const handleReset = () => {
+    console.log('[UI] Reset button clicked');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
     // Clean up thumbnail URL to prevent memory leaks
     if (thumbnail) {
+      console.log('[UI] Revoking thumbnail URL');
       URL.revokeObjectURL(thumbnail);
     }
     reset();
   };
 
   const handleClearFile = () => {
+    console.log('[UI] Clear file button clicked');
     if (canClear()) {
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
       // Clean up thumbnail URL to prevent memory leaks
       if (thumbnail) {
+        console.log('[UI] Revoking thumbnail URL');
         URL.revokeObjectURL(thumbnail);
       }
       clearFile();
+    } else {
+      console.log('[UI] Cannot clear file - not allowed');
     }
   };
 
