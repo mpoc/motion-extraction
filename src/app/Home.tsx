@@ -455,7 +455,9 @@ export default function Home() {
 
   const handleDismissError = () => {
     setError(undefined);
-  };  return (
+  };
+
+  return (
     <div className={clsx(
       "min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-8",
       inter.variable,
