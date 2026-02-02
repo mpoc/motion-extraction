@@ -53,9 +53,10 @@ export default function Home() {
 
   const generateThumbnail = async (file: File) => {
     console.log('[THUMBNAIL] Starting thumbnail generation for file:', file.name, 'size:', file.size);
+    let input: Input | null = null;
     try {
       console.log('[THUMBNAIL] Creating MediaBunny Input...');
-      const input = new Input({
+      input = new Input({
         source: new BlobSource(file),
         formats: ALL_FORMATS,
       });
@@ -120,6 +121,12 @@ export default function Home() {
     } catch (error) {
       console.error('[THUMBNAIL] Error generating thumbnail:', error);
       setError(`Failed to generate thumbnail: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      // Clean up input resources
+      if (input) {
+        console.log('[THUMBNAIL] Disposing input...');
+        input.dispose();
+      }
     }
   };
 
@@ -134,10 +141,13 @@ export default function Home() {
 
     startProcessing();
 
+    // Declare input outside try block for cleanup in finally
+    let input: Input | null = null;
+
     try {
       // Create MediaBunny Input for both tracks
       console.log('[PROCESS] Creating MediaBunny Input...');
-      const input = new Input({
+      input = new Input({
         source: new BlobSource(file),
         formats: ALL_FORMATS,
       });
@@ -316,6 +326,12 @@ export default function Home() {
       console.error('[PROCESS] =================================');
       setError(`Failed to process video: ${error instanceof Error ? error.message : 'Unknown error'}`);
       finishProcessing(''); // Reset processing state on error
+    } finally {
+      // Clean up input resources
+      if (input) {
+        console.log('[PROCESS] Disposing input...');
+        input.dispose();
+      }
     }
   };
 
