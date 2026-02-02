@@ -255,25 +255,21 @@ export default function Home() {
           console.log('[PROCESS] First frame time:', currentTime, 'frameOffset:', frameOffset);
         }
 
-        // Copy current frame to ring buffer (explicitly specify dimensions to handle any size mismatch)
+        // Get offset frame from ring buffer BEFORE writing current frame
+        // (in case buffer indices overlap, though they shouldn't with bufferSize = frameOffset + 1)
         const bufferIndex = frameIndex % bufferSize;
-        const bufferCanvas = frameBuffer[bufferIndex];
-        const bufferCtx = bufferContexts[bufferIndex];
-        bufferCtx.drawImage(wrappedCanvas.canvas, 0, 0, width, height);
+        const offsetIndex = (frameIndex - frameOffset) % bufferSize;
 
-        // Get offset frame from ring buffer (frameOffset frames ago)
-        // Only start outputting once we have enough frames in the buffer
+        // Only output once we have enough frames buffered
         if (frameIndex >= frameOffset) {
-          const sourceCanvas = bufferCanvas; // Current frame (just copied)
-          const offsetIndex = (frameIndex - frameOffset) % bufferSize;
           const offsetCanvas = frameBuffer[offsetIndex];
 
           // Clear canvas
           ctx.globalCompositeOperation = 'source-over';
           ctx.globalAlpha = 1;
 
-          // Draw original frame (A)
-          ctx.drawImage(sourceCanvas, 0, 0, width, height);
+          // Draw original frame (A) - use wrappedCanvas directly for current frame
+          ctx.drawImage(wrappedCanvas.canvas, 0, 0, width, height);
 
           // Draw inverted, offset frame (B) with 50% opacity
           ctx.save();
@@ -286,6 +282,10 @@ export default function Home() {
           const outputTime = (frameIndex - frameOffset) / frameRate;
           await canvasSource.add(outputTime, frameDuration);
         }
+
+        // Copy current frame to ring buffer for future offset lookups
+        const bufferCtx = bufferContexts[bufferIndex];
+        bufferCtx.drawImage(wrappedCanvas.canvas, 0, 0, width, height);
 
         // Update progress
         const progressPercent = ((frameIndex + 1) / totalFrames) * 100;
