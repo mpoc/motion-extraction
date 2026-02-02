@@ -186,6 +186,8 @@ export default function Home() {
         { length: bufferSize },
         () => new OffscreenCanvas(width, height)
       );
+      // Pre-create contexts for each buffer canvas
+      const bufferContexts = frameBuffer.map(canvas => canvas.getContext('2d')!);
 
       // Create OffscreenCanvas for compositing
       const canvas = new OffscreenCanvas(width, height)
@@ -253,13 +255,11 @@ export default function Home() {
           console.log('[PROCESS] First frame time:', currentTime, 'frameOffset:', frameOffset);
         }
 
-        // Copy current frame to ring buffer
+        // Copy current frame to ring buffer (explicitly specify dimensions to handle any size mismatch)
         const bufferIndex = frameIndex % bufferSize;
         const bufferCanvas = frameBuffer[bufferIndex];
-        const bufferCtx = bufferCanvas.getContext('2d');
-        if (bufferCtx) {
-          bufferCtx.drawImage(wrappedCanvas.canvas as HTMLCanvasElement, 0, 0);
-        }
+        const bufferCtx = bufferContexts[bufferIndex];
+        bufferCtx.drawImage(wrappedCanvas.canvas, 0, 0, width, height);
 
         // Get offset frame from ring buffer (frameOffset frames ago)
         // Only start outputting once we have enough frames in the buffer
