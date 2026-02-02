@@ -1,5 +1,3 @@
-"use client";
-
 import 'context-filter-polyfill';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import clsx from "clsx";
@@ -17,20 +15,8 @@ import {
   Output,
   QUALITY_HIGH
 } from "mediabunny";
-import { Inter, JetBrains_Mono } from "next/font/google";
-import Image from "next/image";
 import { useRef } from "react";
 import { useVideoStore } from "../store/videoStore";
-
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter"
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ["latin"],
-  variable: "--font-mono"
-});
 
 export default function Home() {
   const {
@@ -457,12 +443,7 @@ export default function Home() {
   };
 
   return (
-    <div className={clsx(
-      "min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-8",
-      inter.variable,
-      jetbrainsMono.variable,
-      "font-sans"
-    )}>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-8 font-sans">
       <AnimatePresence mode="wait">
         <motion.div
           key="processor"
@@ -577,7 +558,7 @@ export default function Home() {
                       >
                         {thumbnail ? (
                           <div className="w-16 h-16 mx-auto rounded-lg overflow-hidden border-2 border-green-200">
-                            <Image
+                            <img
                               src={thumbnail}
                               alt="Video thumbnail"
                               width={64}
