@@ -172,17 +172,20 @@ export default function Home() {
 
       console.log('[PROCESS] Video properties:', { width, height, totalDuration, frameDuration });
 
-      // Create CanvasSinks for both original and offset video streams
-      console.log('[PROCESS] Creating CanvasSinks...');
-      const sourceSink = new CanvasSink(videoTrack, {
+      // Create a single CanvasSink (more efficient than two separate sinks)
+      console.log('[PROCESS] Creating CanvasSink...');
+      const sink = new CanvasSink(videoTrack, {
         poolSize: 2,
         fit: 'fill',
       });
 
-      const offsetSink = new CanvasSink(videoTrack, {
-        poolSize: 2,
-        fit: 'fill',
-      });
+      // Ring buffer to store recent frames for offset lookup
+      // We need frameOffset + 1 slots to have both current and offset frame available
+      const bufferSize = frameOffset + 1;
+      const frameBuffer: OffscreenCanvas[] = Array.from(
+        { length: bufferSize },
+        () => new OffscreenCanvas(width, height)
+      );
 
       // Create OffscreenCanvas for compositing
       const canvas = new OffscreenCanvas(width, height)
@@ -230,74 +233,65 @@ export default function Home() {
       const totalFrames = Math.floor(totalDuration * frameRate);
       console.log('[PROCESS] Total frames to process:', totalFrames);
 
-      // Process frames using MediaBunny iterators instead of video element seeking
+      // Generate all timestamps in order for efficient single-pass decoding
+      const allTimestamps = Array.from({ length: totalFrames }, (_, i) => i / frameRate);
+      console.log('[PROCESS] Generated', allTimestamps.length, 'timestamps');
+
+      // Process frames using a single CanvasSink with ring buffer
       console.log('[PROCESS] Starting frame processing loop...');
-      for (let frame = 0; frame < totalFrames; frame++) {
-        // if (frame % 60 === 0) { // Log every 60th frame to avoid spam
-        //   console.log(`[PROCESS] Processing frame ${frame}/${totalFrames} (${((frame/totalFrames)*100).toFixed(1)}%)`);
-        // }
+      let frameIndex = 0;
 
-        const currentTime = frame / frameRate;
-        const offsetTime = Math.max(0, currentTime - (frameOffset / frameRate));
-
-        if (frame === 0) {
-          console.log('[PROCESS] First frame times:', { currentTime, offsetTime, frameOffset });
-        }
-
-        // Get frames at specific timestamps using MediaBunny
-        // console.log(`[PROCESS] Frame ${frame}: Getting frames at timestamps:`, { currentTime, offsetTime });
-
-        let sourceCanvas: HTMLCanvasElement | null = null;
-        let offsetCanvas: HTMLCanvasElement | null = null;
-
-        // Get source frame
-        for await (const wrappedCanvas of sourceSink.canvasesAtTimestamps([currentTime])) {
-          if (wrappedCanvas) {
-            sourceCanvas = wrappedCanvas.canvas as HTMLCanvasElement;
-            break;
-          }
-        }
-
-        // Get offset frame
-        for await (const wrappedCanvas of offsetSink.canvasesAtTimestamps([offsetTime])) {
-          if (wrappedCanvas) {
-            offsetCanvas = wrappedCanvas.canvas as HTMLCanvasElement;
-            break;
-          }
-        }
-
-        if (!sourceCanvas || !offsetCanvas) {
-          console.warn(`[PROCESS] Frame ${frame}: Missing canvas - source: ${!!sourceCanvas}, offset: ${!!offsetCanvas}`);
+      for await (const wrappedCanvas of sink.canvasesAtTimestamps(allTimestamps)) {
+        if (!wrappedCanvas) {
+          frameIndex++;
           continue;
         }
 
-        // console.log(`[PROCESS] Frame ${frame}: Both frames obtained, compositing...`);
+        const currentTime = frameIndex / frameRate;
 
-        // Clear canvas
-        ctx.globalCompositeOperation = 'source-over';
-        ctx.globalAlpha = 1;
+        if (frameIndex === 0) {
+          console.log('[PROCESS] First frame time:', currentTime, 'frameOffset:', frameOffset);
+        }
 
-        // Draw original frame (A)
-        ctx.drawImage(sourceCanvas, 0, 0, width, height);
-        // console.log(`[PROCESS] Frame ${frame}: Source frame drawn`);
+        // Copy current frame to ring buffer
+        const bufferIndex = frameIndex % bufferSize;
+        const bufferCanvas = frameBuffer[bufferIndex];
+        const bufferCtx = bufferCanvas.getContext('2d');
+        if (bufferCtx) {
+          bufferCtx.drawImage(wrappedCanvas.canvas as HTMLCanvasElement, 0, 0);
+        }
 
-        // Draw inverted, offset frame (B) with 50% opacity
-        ctx.save();
-        ctx.globalCompositeOperation = 'source-over';
-        ctx.filter = 'invert(1) opacity(0.5)';
-        ctx.drawImage(offsetCanvas, 0, 0, width, height);
-        ctx.restore();
-        // console.log(`[PROCESS] Frame ${frame}: Offset frame drawn with filter`);
+        // Get offset frame from ring buffer (frameOffset frames ago)
+        // Only start outputting once we have enough frames in the buffer
+        if (frameIndex >= frameOffset) {
+          const sourceCanvas = bufferCanvas; // Current frame (just copied)
+          const offsetIndex = (frameIndex - frameOffset) % bufferSize;
+          const offsetCanvas = frameBuffer[offsetIndex];
 
-        // Add frame to output
-        // console.log(`[PROCESS] Frame ${frame}: Adding frame to canvas source...`);
-        await canvasSource.add(currentTime, frameDuration);
-        // console.log(`[PROCESS] Frame ${frame}: Frame added to output`);
+          // Clear canvas
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.globalAlpha = 1;
+
+          // Draw original frame (A)
+          ctx.drawImage(sourceCanvas, 0, 0, width, height);
+
+          // Draw inverted, offset frame (B) with 50% opacity
+          ctx.save();
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.filter = 'invert(1) opacity(0.5)';
+          ctx.drawImage(offsetCanvas, 0, 0, width, height);
+          ctx.restore();
+
+          // Add frame to output (adjust timestamp for output since we start late)
+          const outputTime = (frameIndex - frameOffset) / frameRate;
+          await canvasSource.add(outputTime, frameDuration);
+        }
 
         // Update progress
-        const progressPercent = (frame / totalFrames) * 100;
+        const progressPercent = ((frameIndex + 1) / totalFrames) * 100;
         setProgress(progressPercent);
-        // console.log(`[PROCESS] Frame ${frame}: Progress updated to ${progressPercent.toFixed(1)}%`);
+
+        frameIndex++;
       }
 
       console.log('[PROCESS] All frames processed, closing canvas source...');
